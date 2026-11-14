@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, MOTIVES } from './gameEngine'; // Ou tout dans le même fichier
+import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, MOTIVES, MatrixColumn, TriState } from './gameEngine';
 
-// --- INITIALISATION D'UNE SESSION DE TEST ---
 const engine = new SuperCluedoEngine('MUSE', [
   { id: 'p1', name: 'Robin (Profileuse)', roleId: 'PROFILER' },
   { id: 'p2', name: 'Emma (Vétéran)', roleId: 'VETERAN' },
@@ -9,7 +8,7 @@ const engine = new SuperCluedoEngine('MUSE', [
 
 export default function App() {
   const [session, setSession] = useState(engine.getSession());
-  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'GM'>('PLAYER');
+  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'GM' | 'NOTEBOOK'>('PLAYER');
   const [selectedPlayerId, setSelectedPlayerId] = useState('p1');
   const [actionType, setActionType] = useState<'MOVE' | 'SEARCH' | 'INTERROGATE' | 'ANALYZE' | 'ACCUSE' | 'ARREST'>('MOVE');
   const [targetRoom, setTargetRoom] = useState(1);
@@ -43,82 +42,89 @@ export default function App() {
     refreshSession();
   };
 
+  const handleCycleCell = (suspectId: string, column: MatrixColumn) => {
+    if (!session.notebook.visibleColumns[column]) return;
+    const currentVal = session.notebook.playerNotes[suspectId][column];
+    const nextVal: TriState = currentVal === 'NSP' ? 'YES' : currentVal === 'YES' ? 'NO' : 'NSP';
+    engine.updateNotebookNote(suspectId, column, nextVal);
+    refreshSession();
+  };
+
   const activePlayer = session.players[selectedPlayerId];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 font-sans">
-      {/* Barre de navigation / Sélecteur de mode (Outil de test) */}
-      <header className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6 flex flex-wrap justify-between items-center gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-amber-400">🏛️ Super Cluedo v2 : Édition Musée</h1>
-          <p className="text-xs text-slate-400">Phase actuelle : <span className="text-emerald-400 font-semibold">{session.phase}</span> | Tour n°{session.turnNumber}</p>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 font-sans max-w-xl mx-auto">
+      {/* En-tête de navigation */}
+      <header className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-4 flex flex-col gap-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-base font-bold text-amber-400">🏛️ Super Cluedo v2</h1>
+            <p className="text-xs text-slate-400">Tour n°{session.turnNumber} | Phase : <span className="text-emerald-400 font-semibold">{session.phase}</span></p>
+          </div>
+          <select 
+            value={selectedPlayerId} 
+            onChange={(e) => setSelectedPlayerId(e.target.value)}
+            className="bg-slate-950 text-xs text-slate-300 border border-slate-700 rounded p-1"
+          >
+            {Object.values(session.players).map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <span className="text-xs text-slate-400">Mode d'affichage :</span>
+        {/* Boutons de bascule de vue */}
+        <div className="grid grid-cols-3 gap-2 text-xs">
           <button 
             onClick={() => setCurrentViewMode('PLAYER')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${currentViewMode === 'PLAYER' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
+            className={`py-2 rounded-lg font-bold transition ${currentViewMode === 'PLAYER' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
           >
-            📱 Vue Joueur (Mobile)
+            📱 Action
+          </button>
+          <button 
+            onClick={() => setCurrentViewMode('NOTEBOOK')}
+            className={`py-2 rounded-lg font-bold transition ${currentViewMode === 'NOTEBOOK' ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}
+          >
+            📋 Carnet
           </button>
           <button 
             onClick={() => setCurrentViewMode('GM')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${currentViewMode === 'GM' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}
+            className={`py-2 rounded-lg font-bold transition ${currentViewMode === 'GM' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300'}`}
           >
-            💻 Console Maître du Jeu
+            💻 Console MJ
           </button>
         </div>
       </header>
 
-      {/* --- VUE JOUEUR (TERMINAL MOBILE) --- */}
+      {/* --- VUE JOUEUR : TERMINAL D'ACTION --- */}
       {currentViewMode === 'PLAYER' && (
-        <div className="max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+          <div className="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs">
             <div>
-              <h2 className="text-lg font-bold text-amber-400">Terminal d'Enquête</h2>
-              <select 
-                value={selectedPlayerId} 
-                onChange={(e) => setSelectedPlayerId(e.target.value)}
-                className="bg-slate-950 text-xs text-slate-300 border border-slate-700 rounded p-1 mt-1"
-              >
-                {Object.values(session.players).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.roleId})</option>
-                ))}
-              </select>
+              <p className="text-slate-400">Position actuelle :</p>
+              <p className="font-bold text-slate-200">
+                {activePlayer.currentRoomId === 0 ? '🔒 QG Central' : `Salle ${activePlayer.currentRoomId}`}
+              </p>
             </div>
-            <div className="text-right">
-              <span className="bg-blue-900/60 text-blue-300 border border-blue-700 px-2.5 py-1 rounded text-xs font-semibold">
-                ⚡ PA : {activePlayer.remainingAP} / 2
-              </span>
-            </div>
+            <span className="bg-blue-950 text-blue-300 border border-blue-800 px-3 py-1 rounded-lg font-semibold">
+              ⚡ PA : {activePlayer.remainingAP} / 2
+            </span>
           </div>
 
-          {/* Statut de la salle actuelle */}
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 mb-4 text-xs">
-            <p className="text-slate-400">Position actuelle :</p>
-            <p className="font-bold text-slate-200">
-              {activePlayer.currentRoomId === 0 ? '🔒 QG Central' : `Salle ${activePlayer.currentRoomId} (${MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId)?.name})`}
-            </p>
-          </div>
-
-          {/* Choix de l'action */}
-          <div className="space-y-3 text-xs mb-4">
-            <label className="block text-slate-400">Action à réaliser (1 PA) :</label>
+          <div className="space-y-3 text-xs">
+            <label className="block text-slate-400">Action à réaliser :</label>
             <select 
               value={actionType} 
               onChange={(e) => setActionType(e.target.value as any)}
               className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-slate-200"
             >
-              <option value="MOVE">🏃 Se déplacer vers une salle adjacente</option>
+              <option value="MOVE">🏃 Se déplacer vers une salle</option>
               <option value="SEARCH">🔍 Fouiller une zone (A ou B)</option>
-              <option value="INTERROGATE">💬 Interroger un PNJ présent</option>
-              <option value="ANALYZE">🔬 Analyser un indice en labo</option>
+              <option value="INTERROGATE">💬 Interroger un PNJ</option>
+              <option value="ANALYZE">🔬 Analyser un indice</option>
               <option value="ACCUSE">🚨 Accusation officielle (QG)</option>
-              <option value="ARREST">🎯 Tenter l'interpellation (Chasse à l'homme)</option>
+              <option value="ARREST">🎯 Tenter l'interpellation</option>
             </select>
 
-            {/* Paramètres dynamiques selon l'action */}
             {actionType === 'MOVE' && (
               <div>
                 <label className="block text-slate-400 mt-2 mb-1">Salle cible :</label>
@@ -135,28 +141,15 @@ export default function App() {
             )}
 
             {actionType === 'SEARCH' && (
-              <div>
-                <label className="block text-slate-400 mt-2 mb-1">Zone cible :</label>
-                <div className="flex space-x-2">
-                  <button 
-                    onClick={() => setTargetZone('A')} 
-                    className={`flex-1 py-2 rounded border ${targetZone === 'A' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}
-                  >
-                    Zone A
-                  </button>
-                  <button 
-                    onClick={() => setTargetZone('B')} 
-                    className={`flex-1 py-2 rounded border ${targetZone === 'B' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}
-                  >
-                    Zone B
-                  </button>
-                </div>
+              <div className="flex space-x-2 mt-2">
+                <button onClick={() => setTargetZone('A')} className={`flex-1 py-2 rounded border ${targetZone === 'A' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>Zone A</button>
+                <button onClick={() => setTargetZone('B')} className={`flex-1 py-2 rounded border ${targetZone === 'B' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`}>Zone B</button>
               </div>
             )}
 
             {actionType === 'INTERROGATE' && (
               <div>
-                <label className="block text-slate-400 mt-2 mb-1">Suspect à interroger :</label>
+                <label className="block text-slate-400 mt-2 mb-1">Suspect :</label>
                 <select 
                   value={targetNpc} 
                   onChange={(e) => setTargetNpc(e.target.value)}
@@ -169,7 +162,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Saisie du dé */}
             <div className="mt-3">
               <label className="block text-slate-400 mb-1">Résultat de votre Dé (1 à 6) :</label>
               <div className="flex space-x-1">
@@ -188,70 +180,113 @@ export default function App() {
 
           <button 
             onClick={handlePlayerSubmit}
-            className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg text-sm"
+            className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl transition text-xs shadow-lg mt-2"
           >
             Transmettre l'Action au Maître du Jeu
           </button>
         </div>
       )}
 
-      {/* --- VUE MAÎTRE DU JEU (CONSOLE D'ARBITRAGE) --- */}
-      {currentViewMode === 'GM' && (
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
-            <h2 className="text-lg font-bold text-indigo-400 mb-4">💻 Console d'Arbitrage du Maître du Jeu</h2>
+      {/* --- VUE CARNET MATRICIEL INTERACTIF --- */}
+      {currentViewMode === 'NOTEBOOK' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 text-xs">
+          <h2 className="text-sm font-bold text-amber-400 mb-2">📋 Carnet d'Enquête (Grille Matricielle)</h2>
+          <p className="text-slate-400 text-[11px]">Cliquez sur les cellules pour basculer entre <span className="text-slate-500">? (NSP)</span>, <span className="text-emerald-400 font-bold">OUI</span> et <span className="text-rose-400 font-bold">NON</span>.</p>
 
-            {/* Solution secrète (rappel MJ) */}
-            <div className="bg-indigo-950/40 border border-indigo-900/50 p-4 rounded-xl mb-6 text-xs">
-              <p className="font-bold text-indigo-300 mb-1">🔒 Solution Secrète de la Partie :</p>
-              <p className="text-slate-300">
-                Meurtrier : <span className="text-amber-400 font-semibold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span> | 
-                Arme : <span className="text-amber-400 font-semibold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span> | 
-                Salle du Crime : <span className="text-amber-400 font-semibold">Salle {session.secretSolution.crimeSceneRoomId}</span> | 
-                Mobile : <span className="text-amber-400 font-semibold">{MOTIVES.find(m => m.id === session.secretSolution.motiveId)?.name}</span>
-              </p>
-            </div>
-
-            {/* Action en attente d'approbation */}
-            <div className="border border-slate-800 rounded-xl p-4 bg-slate-950">
-              <h3 className="text-sm font-semibold text-slate-300 mb-3">📡 File d'attente des actions joueurs :</h3>
-              {session.pendingAction ? (
-                <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-amber-400">{session.pendingAction.playerName} ({session.pendingAction.roleId})</span>
-                    <span className="text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300">Action : {session.pendingAction.actionType}</span>
-                  </div>
-                  <p className="text-xs text-slate-300 bg-slate-950 p-3 rounded border border-slate-800 font-mono">
-                    {session.pendingAction.secretGmVerdict}
-                  </p>
-                  <button 
-                    onClick={handleGmApprove}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg transition text-xs shadow"
-                  >
-                    Valider & Mettre à jour le Plateau
-                  </button>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-500 italic text-center py-6">Aucune action en attente. En attente de soumission sur les terminaux mobiles...</p>
-              )}
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 text-[11px]">
+                  <th className="p-2">Suspect</th>
+                  <th className="p-2 text-center">Sexe {session.notebook.visibleColumns.GENDER ? '🔓' : '🔒'}</th>
+                  <th className="p-2 text-center">Statut {session.notebook.visibleColumns.STATUS ? '🔓' : '🔒'}</th>
+                  <th className="p-2 text-center">Titre {session.notebook.visibleColumns.TITLE ? '🔓' : '🔒'}</th>
+                  <th className="p-2 text-center">Lettre O {session.notebook.visibleColumns.LETTER_O ? '🔓' : '🔒'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SUSPECTS.map((s) => {
+                  const isDiscovered = session.notebook.discoveredSuspectIds.includes(s.id);
+                  if (!isDiscovered) {
+                    return (
+                      <tr key={s.id} className="border-b border-slate-900 text-slate-600 italic">
+                        <td className="p-2">Inconnu (Salle non visitée)</td>
+                        <td colSpan={4} className="p-2 text-center text-[10px]">🔒 Non rencontré</td>
+                      </tr>
+                    );
+                  }
+                  const notes = session.notebook.playerNotes[s.id];
+                  return (
+                    <tr key={s.id} className="border-b border-slate-800/60 hover:bg-slate-950/40">
+                      <td className="p-2 font-semibold text-slate-200">{s.name}</td>
+                      {(['GENDER', 'STATUS', 'TITLE', 'LETTER_O'] as MatrixColumn[]).map((col) => {
+                        const unlocked = session.notebook.visibleColumns[col];
+                        const val = notes[col];
+                        return (
+                          <td key={col} className="p-2 text-center">
+                            {unlocked ? (
+                              <button
+                                onClick={() => handleCycleCell(s.id, col)}
+                                className={`w-8 h-8 rounded font-bold text-xs transition border ${
+                                  val === 'YES' ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700' :
+                                  val === 'NO' ? 'bg-rose-950/80 text-rose-300 border-rose-700' :
+                                  'bg-slate-950 text-slate-500 border-slate-800'
+                                }`}
+                              >
+                                {val === 'YES' ? '✓' : val === 'NO' ? '✗' : '?'}
+                              </button>
+                            ) : (
+                              <span className="text-slate-700 text-[10px]">🔒</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          {/* Journal public des indices */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
-            <h3 className="text-sm font-semibold text-slate-300 mb-3">📜 Journal Public des Preuves & Paliers</h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto text-xs">
+          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 mt-4">
+            <h3 className="font-semibold text-slate-300 mb-2">📜 Journal des Indices Publics :</h3>
+            <div className="space-y-1.5 max-h-32 overflow-y-auto text-[11px]">
               {session.notebook.publicCluesLog.length === 0 ? (
-                <p className="text-slate-500 italic">Aucun indice découvert pour l'instant.</p>
+                <p className="text-slate-500 italic">Aucun palier d'indice découvert pour l'instant.</p>
               ) : (
-                session.notebook.publicCluesLog.map((log, idx) => (
-                  <div key={idx} className="bg-slate-950 p-2.5 rounded border border-slate-800 flex justify-between">
-                    <span className="text-slate-200">{log.text}</span>
-                    <span className="text-slate-500 font-mono">Tour {log.turn}</span>
-                  </div>
+                session.notebook.publicCluesLog.map((log, i) => (
+                  <p key={i} className="text-slate-300">• {log.text}</p>
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- VUE CONSOLE MJ --- */}
+      {currentViewMode === 'GM' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 text-xs">
+          <h2 className="text-sm font-bold text-indigo-400">💻 Console d'Arbitrage MJ</h2>
+          <div className="bg-indigo-950/40 p-3 rounded-xl border border-indigo-900/50">
+            <p className="font-bold text-indigo-300 mb-1">🔒 Solution Secrète :</p>
+            <p className="text-slate-300">
+              Meurtrier : <span className="text-amber-400 font-semibold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span> | Arme : <span className="text-amber-400 font-semibold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span>
+            </p>
+          </div>
+
+          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <p className="font-semibold text-slate-300 mb-2">📡 Action en attente :</p>
+            {session.pendingAction ? (
+              <div className="space-y-2">
+                <p className="text-amber-400 font-bold">{session.pendingAction.playerName} ({session.pendingAction.actionType})</p>
+                <p className="bg-slate-900 p-2 rounded text-slate-300 font-mono text-[11px]">{session.pendingAction.secretGmVerdict}</p>
+                <button onClick={handleGmApprove} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded transition">
+                  Valider & Mettre à jour
+                </button>
+              </div>
+            ) : (
+              <p className="text-slate-500 italic">Aucune action en attente...</p>
+            )}
           </div>
         </div>
       )}
