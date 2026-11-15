@@ -11,9 +11,9 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState(1);
   const [interrogateFeedback, setInterrogateFeedback] = useState<string | null>(null);
 
-  // Nouveaux états restaurés pour le sélecteur d'action et le dé
+  // Gestion des actions et du dé physique
   const [selectedAction, setSelectedAction] = useState<'deplacer' | 'fouiller_a' | 'fouiller_b' | 'interroger'>('deplacer');
-  const [dieResult, setDieResult] = useState<number | null>(null);
+  const [dieResult, setDieResult] = useState<number | null>(3); // Valeur par défaut
 
   const refreshState = () => {
     setGameState({ ...engine.session });
@@ -22,6 +22,16 @@ export default function App() {
   const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
   const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
   const roomConfig = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
+
+  // Libellés élégants pour les ailes du musée
+  const getWingLabel = (ring: string) => {
+    switch (ring) {
+      case 'hq': return '🏛️ QG Central';
+      case 'inner': return '🏛️ Aile Historique';
+      case 'outer': return '🖼️ Galerie Périphérique';
+      default: return ring;
+    }
+  };
 
   // Compteurs globaux MJ
   const totalDiscoveredNpcs = Object.values(gameState.roomsState).reduce((acc: number, room: any) => acc + room.npcIds.length, 0);
@@ -88,8 +98,9 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* GRILLE DU PRISME PENTAGONAL (SALLES ACCESSIBLES FILTRÉES) */}
-            <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6">
-              <h2 className="text-lg font-semibold mb-4 text-slate-200">Prisme Pentagonal (QG & Salles 1-10)</h2>
+            <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
+              <h2 className="text-lg font-semibold mb-2 text-slate-200">Plan Tactique du Musée (Prisme Pentagonal)</h2>
+              <p className="text-xs text-slate-400 mb-4">Les salles accessibles depuis votre position actuelle sont surlignées en vert.</p>
               
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {MUSEUM_ROOMS.map((room) => {
@@ -112,32 +123,32 @@ export default function App() {
                       }}
                       className={`p-4 rounded-xl border transition-all ${
                         isPlayerHere 
-                          ? 'border-amber-400 bg-amber-950/30 shadow-lg shadow-amber-500/10' 
+                          ? 'border-amber-400 bg-amber-950/40 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400' 
                           : isAccessible && selectedAction === 'deplacer'
-                            ? 'border-emerald-500/60 bg-slate-900 hover:border-emerald-400 cursor-pointer shadow-sm shadow-emerald-500/20'
-                            : 'border-slate-800 bg-slate-950 opacity-60'
+                            ? 'border-emerald-500 bg-slate-900 hover:border-emerald-400 cursor-pointer shadow-md shadow-emerald-500/20'
+                            : 'border-slate-800 bg-slate-950/80 opacity-60'
                       }`}
                     >
                       <div className="flex justify-between items-start mb-2">
-                        <span className="text-xs font-mono text-slate-500">#{room.id}</span>
-                        <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                          {room.ring.toUpperCase()}
+                        <span className="text-xs font-mono text-slate-400 font-bold">#{room.id}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
+                          {getWingLabel(room.ring)}
                         </span>
                       </div>
-                      <h3 className="font-medium text-sm text-slate-100 mb-1">{room.name}</h3>
+                      <h3 className="font-semibold text-sm text-slate-100 mb-1">{room.name}</h3>
                       <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{room.description}</p>
                       
                       {roomState?.npcIds && roomState.npcIds.length > 0 && (
                         <div className="mt-2 text-xs text-rose-400 flex flex-wrap gap-1">
                           {roomState.npcIds.map((npcId: string) => {
                             const s = SUSPECTS.find(item => item.id === npcId);
-                            return <span key={npcId} className="bg-rose-950/50 px-1.5 py-0.5 rounded border border-rose-900">👤 {s?.name}</span>;
+                            return <span key={npcId} className="bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900 font-medium">👤 {s?.name}</span>;
                           })}
                         </div>
                       )}
 
                       {roomState?.searchedZones.length > 0 && (
-                        <div className="mt-2 text-[10px] text-slate-400">
+                        <div className="mt-2 text-[10px] text-slate-400 font-mono">
                           Zones fouillées : {roomState.searchedZones.join(', ')}
                         </div>
                       )}
@@ -147,11 +158,11 @@ export default function App() {
               </div>
             </div>
 
-            {/* PANNEAU LATÉRAL : SÉLECTEUR D'ACTIONS & DÉ */}
+            {/* PANNEAU LATÉRAL : SÉLECTEUR D'ACTIONS & DÉ PHYSIQUE */}
             <div className="space-y-6">
               <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
                 <h2 className="text-md font-semibold text-slate-200">
-                  Position : <span className="text-amber-400">{roomConfig?.name}</span>
+                  Position actuelle : <span className="text-amber-400">{roomConfig?.name}</span>
                 </h2>
                 
                 {/* Sélecteur d'actions explicite */}
@@ -185,25 +196,24 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Gestion du Lancer de Dé */}
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center">
-                  <div>
-                    <span className="text-xs text-slate-300 block">Lancer de Dé :</span>
-                    <span className="text-[10px] text-slate-500">Nécessaire pour certaines actions</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-amber-400 font-bold text-lg bg-slate-900 px-3 py-1 rounded border border-slate-800">
+                {/* Saisir le résultat du Dé Physique */}
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-300 font-medium">Résultat du Dé Physique :</span>
+                    <span className="text-amber-400 font-bold text-lg bg-slate-900 px-3 py-0.5 rounded border border-slate-800">
                       {dieResult !== null ? dieResult : '-'}
                     </span>
-                    <button 
-                      onClick={() => {
-                        const roll = Math.floor(Math.random() * 6) + 1;
-                        setDieResult(roll);
-                      }}
-                      className="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-2 rounded-lg border border-slate-700 text-slate-200 transition font-medium"
-                    >
-                      🎲 Lancer
-                    </button>
+                  </div>
+                  <div className="flex gap-1 justify-between">
+                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => setDieResult(num)}
+                        className={`flex-1 py-1 rounded text-xs font-bold border transition ${dieResult === num ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm' : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'}`}
+                      >
+                        {num}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -218,7 +228,7 @@ export default function App() {
                         }
                         refreshState();
                       }}
-                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition"
+                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
                     >
                       Exécuter la Fouille Zone A (1 PA)
                     </button>
@@ -230,7 +240,7 @@ export default function App() {
                         engine.searchRoomZone(activePlayer.id, 'B');
                         refreshState();
                       }}
-                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition"
+                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
                     >
                       Exécuter la Fouille Zone B (1 PA)
                     </button>
@@ -249,7 +259,7 @@ export default function App() {
                               setInterrogateFeedback(`${npc?.name} : ${res.testimonial}`);
                               refreshState();
                             }}
-                            className="w-full bg-rose-950/50 hover:bg-rose-950 border border-rose-900 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left"
+                            className="w-full bg-rose-950/50 hover:bg-rose-950 border border-rose-900 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left font-medium"
                           >
                             💬 Interroger {npc?.name} (1 PA)
                           </button>
@@ -277,7 +287,7 @@ export default function App() {
                         engine.analyzeItem(currentRoomState.weaponId!);
                         refreshState();
                       }}
-                      className="w-full bg-indigo-900/60 hover:bg-indigo-900 text-sm font-medium py-2 px-3 rounded-lg border border-indigo-700 transition text-left"
+                      className="w-full bg-indigo-900/60 hover:bg-indigo-900 text-xs font-semibold py-2 px-3 rounded-lg border border-indigo-700 transition text-left text-indigo-200"
                     >
                       🔬 Analyser l'arme sur place (Technicien)
                     </button>
