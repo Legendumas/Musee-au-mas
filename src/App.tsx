@@ -189,7 +189,60 @@ export default function App() {
         
         {/* ONGLET 1 : PLAN TACTIQUE & ACTIONS */}
         {activeTab === 'board' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-6">
+            
+            {/* ENCART DE TRAQUE (S'affiche dynamiquement si la phase est 'chase') */}
+            {gameState.phase === 'chase' && (
+              <div className="bg-rose-950/80 border-2 border-rose-600 rounded-xl p-6 shadow-2xl animate-pulse">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-rose-300 flex items-center gap-2">
+                    🚨 MODE TRAQUE ACTIVE : COURSE-POURSUITE FINALE !
+                  </h2>
+                  <span className="text-xs bg-rose-900 text-rose-200 px-3 py-1 rounded-full font-mono font-bold">
+                    Fugitif en fuite dans le Musée
+                  </span>
+                </div>
+
+                <p className="text-xs text-rose-200 mb-4">
+                  L'accusation est correcte ! Le suspect tente de quitter le musée. 
+                  Coordonnez vos déplacements et tentez une interpellation en vous appuyant sur votre dé physique.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-950 p-4 rounded-xl border border-rose-900/50 items-center">
+                  <div>
+                    <span className="text-xs text-slate-400 block">Cible en fuite :</span>
+                    <span className="text-amber-400 font-bold text-sm">
+                      {SUSPECTS.find(s => s.id === gameState.secretSolution.murdererId)?.name}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-slate-400 block">Votre position actuelle :</span>
+                    <span className="text-amber-400 font-bold text-sm">
+                      Salle #{activePlayer.currentRoomId} ({roomConfig?.name})
+                    </span>
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => {
+                        if (dieResult !== null && dieResult >= 3) {
+                          alert("🎯 ARRESTATION RÉUSSIE ! Le suspect est mis hors d'état de nuire. Victoire des détectives !");
+                          engine.session.phase = 'victory';
+                          refreshState();
+                        } else {
+                          alert(`❌ Échec de l'interpellation (Résultat du dé : ${dieResult !== null ? dieResult : 'non défini'}). Seuil requis : 3 ou plus.`);
+                        }
+                      }}
+                      className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-3 rounded-lg text-xs transition shadow"
+                    >
+                      Tentative d'Interpellation (Dé ≥ 3)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Grille principale et panneau d'actions côte à côte */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* GRILLE DU PRISME PENTAGONAL (SALLES ACCESSIBLES FILTRÉES) */}
             <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
