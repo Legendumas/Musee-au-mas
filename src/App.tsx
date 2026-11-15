@@ -8,7 +8,6 @@ export default function App() {
     { name: '', role: 'profileuse' }
   ]);
   const [mjName, setMjName] = useState('');
-  const [userRole, setUserRole] = useState<'player' | 'mj'>('player');
 
   // 2. États principaux du jeu (initialisés après le clic sur "Lancer")
   const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
@@ -25,30 +24,15 @@ export default function App() {
   const [selectedAction, setSelectedAction] = useState<'deplacer' | 'fouiller_a' | 'fouiller_b' | 'interroger'>('deplacer');
   const [dieResult, setDieResult] = useState<number | null>(3); // Valeur par défaut
 
-  // Lancer la partie avec les joueurs configurés
+  // Lancer la partie avec les joueurs configurés dynamiquement
   const handleStartGame = () => {
     if (playersConfig.length === 0) {
       alert("Veuillez ajouter au moins un détective !");
       return;
     }
 
-    const newEngine = new SuperCluedoEngine();
-    const formattedPlayers: Record<string, any> = {};
-    
-    playersConfig.forEach((p, index) => {
-      const playerId = `player${index + 1}`;
-      formattedPlayers[playerId] = {
-        id: playerId,
-        name: p.name.trim() || `Détective ${index + 1}`,
-        role: p.role,
-        currentRoomId: 0,
-        actionPoints: 2,
-        maxActionPoints: 2,
-        notes: {}
-      };
-    });
-
-    newEngine.session.players = formattedPlayers;
+    // Instanciation du moteur en passant la configuration des joueurs
+    const newEngine = new SuperCluedoEngine(playersConfig);
     setEngine(newEngine);
     setGameState(newEngine.session);
     setGameStarted(true); // Bascule l'affichage vers le plateau
@@ -69,7 +53,7 @@ export default function App() {
   };
 
   // ----------------------------------------------------
-  // ÉCRAN 1 : MENU DE CONFIGURATION (S'affiche si gameStarted est false)
+  // ÉCRAN 1 : MENU DE CONFIGURATION
   // ----------------------------------------------------
   if (!gameStarted) {
     return (
@@ -159,10 +143,10 @@ export default function App() {
   }
 
   // ----------------------------------------------------
-  // ÉCRAN 2 : PLATEAU DE JEU PRINCIPAL (Sécurisé)
+  // ÉCRAN 2 : PLATEAU DE JEU PRINCIPAL
   // ----------------------------------------------------
   if (!gameState || !engine) {
-    return null; // Évite le plantage si l'état n'est pas encore initialisé
+    return null; 
   }
   const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
   const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
@@ -231,7 +215,7 @@ export default function App() {
         {activeTab === 'board' && (
           <div className="space-y-6">
             
-            {/* ENCART DE TRAQUE (S'affiche dynamiquement si la phase est 'chase') */}
+            {/* ENCART DE TRAQUE */}
             {gameState.phase === 'chase' && (
               <div className="bg-rose-950/80 border-2 border-rose-600 rounded-xl p-6 shadow-2xl animate-pulse">
                 <div className="flex justify-between items-center mb-4">
@@ -281,10 +265,9 @@ export default function App() {
               </div>
             )}
 
-            {/* Grille principale et panneau d'actions côte à côte */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              {/* GRILLE DU PRISME PENTAGONAL (SALLES ACCESSIBLES FILTRÉES) */}
+              {/* GRILLE DU PRISME PENTAGONAL */}
               <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
                 <h2 className="text-lg font-semibold mb-2 text-slate-200">Plan Tactique du Musée (Prisme Pentagonal)</h2>
                 <p className="text-xs text-slate-400 mb-4">Les salles accessibles depuis votre position actuelle sont surlignées en vert.</p>
@@ -296,7 +279,6 @@ export default function App() {
                     const isHQ = room.id === 0;
                     const currentRoomCfg = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
                     
-                    // Calcul de l'accessibilité : QG central ou salle adjacente directe
                     const isAccessible = isHQ || activePlayer.currentRoomId === 0 || currentRoomCfg?.adjacentRooms.includes(room.id);
 
                     return (
@@ -323,7 +305,6 @@ export default function App() {
                           </span>
                         </div>
                         <h3 className="font-semibold text-sm text-slate-100 mb-1">{room.name}</h3>
-                        <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{room.description}</p>
                         
                         {roomState?.npcIds && roomState.npcIds.length > 0 && (
                           <div className="mt-2 text-xs text-rose-400 flex flex-wrap gap-1">
@@ -352,31 +333,30 @@ export default function App() {
                     Position actuelle : <span className="text-amber-400">{roomConfig?.name}</span>
                   </h2>
                   
-                  {/* Sélecteur d'actions explicite */}
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sélectionner une Action :</label>
                     <div className="grid grid-cols-2 gap-2">
                       <button 
                         onClick={() => setSelectedAction('deplacer')}
-                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'deplacer' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'deplacer' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
                       >
                         🚶 Déplacement
                       </button>
                       <button 
                         onClick={() => setSelectedAction('fouiller_a')}
-                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_a' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_a' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
                       >
                         🔍 Fouiller Zone A
                       </button>
                       <button 
                         onClick={() => setSelectedAction('fouiller_b')}
-                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_b' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_b' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
                       >
                         🔎 Fouiller Zone B
                       </button>
                       <button 
                         onClick={() => setSelectedAction('interroger')}
-                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'interroger' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'interroger' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
                       >
                         💬 Interroger
                       </button>
@@ -442,8 +422,9 @@ export default function App() {
                             <button
                               key={npcId}
                               onClick={() => {
-                                const res = engine.performInterrogation(activePlayer.id, npcId);
-                                setInterrogateFeedback(`${npc?.name} : ${res.testimonial}`);
+                                const roll = dieResult !== null ? dieResult : 3;
+                                const res = engine.performInterrogation(activePlayer.id, npcId, roll);
+                                setInterrogateFeedback(`${npc?.name} (Dé: ${roll}) : ${res.testimonial}`);
                                 refreshState();
                               }}
                               className="w-full bg-rose-950/50 hover:bg-rose-950 border border-rose-900 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left font-medium"
@@ -467,7 +448,6 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* Rôle Technicien : Analyse sur place */}
                     {activePlayer.role === 'technicien' && currentRoomState?.weaponId && (
                       <button 
                         onClick={() => {
@@ -488,7 +468,7 @@ export default function App() {
                       }}
                       className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold py-2.5 px-3 rounded-lg transition text-white shadow-lg shadow-emerald-900/20"
                     >
-                      ▶️ Terminer le Tour / Déplacer les PNJ
+                      ▶️ Terminer le Tour / Recharger PA
                     </button>
 
                     <button 
