@@ -343,3 +343,21 @@ export class SuperCluedoEngine {
     this.moveAllNpcs();
   }
 }
+// ==========================================
+// EXTENSION : MODE TRAQUE & FIN DE PARTIE
+// ==========================================
+
+export interface ChaseState {
+  fugitiveId: string;
+  currentRoomId: number;
+  remainingTurns: number;
+  status: 'active' | 'arrested' | 'escaped';
+}
+
+// Méthode optionnelle à intégrer dans ta classe SuperCluedoEngine si tu veux centraliser la logique de traque :
+/*
+  public triggerChase(fugitiveId: string, initialRoomId: number) {
+    this.session.phase = 'chase';
+    this.log(`ALERTE : Mode traque activé ! ${fugitiveId} prend la fuite depuis la salle #${initialRoomId}.`);
+  }
+*/
