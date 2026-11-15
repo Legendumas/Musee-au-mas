@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, RoleType } from './gameEngine';
 
 export default function App() {
-  // 1. États pour la configuration initiale (Menu des joueurs)
+// 1. Configuration initiale entièrement vide et dynamique
   const [gameStarted, setGameStarted] = useState(false);
-  const [p1Name, setP1Name] = useState('Robin');
-  const [p1Role, setP1Role] = useState<RoleType>('profileuse');
-  const [p2Name, setP2Name] = useState('Emma');
-  const [p2Role, setP2Role] = useState<RoleType>('veteran');
+  const [playersConfig, setPlayersConfig] = useState<Array<{ name: string; role: RoleType }>>([
+    { name: '', role: 'profileuse' }
+  ]);
+  const [mjName, setMjName] = useState('');
+  const [userRole, setUserRole] = useState<'player' | 'mj'>('player');
 
   // 2. États principaux du jeu (initialisés après le clic sur "Lancer")
   const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
@@ -24,18 +25,34 @@ export default function App() {
   const [selectedAction, setSelectedAction] = useState<'deplacer' | 'fouiller_a' | 'fouiller_b' | 'interroger'>('deplacer');
   const [dieResult, setDieResult] = useState<number | null>(3); // Valeur par défaut
 
-  // Fonction de lancement de la partie
+  // Lancer la partie avec les joueurs configurés
   const handleStartGame = () => {
+    if (playersConfig.length === 0) {
+      alert("Veuillez ajouter au moins un détective !");
+      return;
+    }
+
     const newEngine = new SuperCluedoEngine();
-    newEngine.session.players = {
-      player1: { id: 'player1', name: p1Name, role: p1Role, currentRoomId: 0, actionPoints: 2, maxActionPoints: 2, notes: {} },
-      player2: { id: 'player2', name: p2Name, role: p2Role, currentRoomId: 0, actionPoints: 2, maxActionPoints: 2, notes: {} },
-    };
+    const formattedPlayers: Record<string, any> = {};
+    
+    playersConfig.forEach((p, index) => {
+      const playerId = `player${index + 1}`;
+      formattedPlayers[playerId] = {
+        id: playerId,
+        name: p.name.trim() || `Détective ${index + 1}`,
+        role: p.role,
+        currentRoomId: 0,
+        actionPoints: 2,
+        maxActionPoints: 2,
+        notes: {}
+      };
+    });
+
+    newEngine.session.players = formattedPlayers;
     setEngine(newEngine);
     setGameState(newEngine.session);
     setGameStarted(true);
   };
-
   const refreshState = () => {
     if (engine) setGameState({ ...engine.session });
   };
