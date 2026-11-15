@@ -5,12 +5,11 @@ export default function App() {
   const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
   const [session, setSession] = useState<any>(null);
 
-  // Configuration initiale avec option MJ
   const [participantNames, setParticipantNames] = useState<string[]>(['Robin', 'Emma', 'Arbitre']);
   const [participantRoles, setParticipantRoles] = useState<string[]>(['PROFILER', 'VETERAN', 'GM']);
 
   const [appMode, setAppMode] = useState<'SETUP' | 'PLAYER_TERMINAL' | 'GM_CONSOLE'>('SETUP');
-  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'NOTEBOOK'>('PLAYER');
+  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'NOTEBOOK' | 'MAP'>('PLAYER');
   
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [actionType, setActionType] = useState<'MOVE' | 'SEARCH' | 'INTERROGATE' | 'ANALYZE' | 'ACCUSE' | 'ARREST'>('MOVE');
@@ -21,8 +20,6 @@ export default function App() {
 
   const handleStartGame = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Séparer les vrais joueurs des Maîtres du Jeu
     const playersConfig = participantNames
       .map((name, index) => ({
         name: name.trim() || `Participant ${index + 1}`,
@@ -32,7 +29,7 @@ export default function App() {
       .filter((p) => p.role !== 'GM');
 
     if (playersConfig.length === 0) {
-      alert("Il faut au moins un détective (joueur) pour lancer la partie !");
+      alert("Il faut au moins un détective pour lancer la partie !");
       return;
     }
 
@@ -88,13 +85,12 @@ export default function App() {
     refreshSession();
   };
 
-  // Filtrer les salles accessibles depuis le QG (Salles de l'aile intérieure : 1, 2, 3 par exemple)
   const activePlayer = session?.players[selectedPlayerId];
+  // Une fois qu'on a bougé au moins une fois (ou selon la règle), on peut cibler plus largement ou garder la restriction QG
   const availableRooms = activePlayer?.currentRoomId === 0 
-    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 4) // restriction QG vers l'aile intérieure
+    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 4) 
     : MUSEUM_ROOMS;
 
-  // --- 1. LOBBY DE CONFIGURATION AVEC RÔLE MJ ---
   if (appMode === 'SETUP' || !session || !engine) {
     return (
       <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-6 flex flex-col justify-center items-center font-sans">
@@ -176,7 +172,6 @@ export default function App() {
     );
   }
 
-  // --- 2. CONSOLE EXCLUSIVE DU MAÎTRE DU JEU ---
   if (appMode === 'GM_CONSOLE') {
     return (
       <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
@@ -223,7 +218,6 @@ export default function App() {
     );
   }
 
-  // --- 3. TERMINAL JOUEUR (SANS ACCÈS MJ SAUF SI LE RÔLE GM EST UTILISÉ SUR CET APPAREIL) ---
   return (
     <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
       <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl mb-4 shadow-xl">
@@ -252,18 +246,24 @@ export default function App() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+        <div className="grid grid-cols-3 gap-2 text-xs font-bold">
           <button 
             onClick={() => setCurrentViewMode('PLAYER')}
             className={`py-2 rounded-xl transition border ${currentViewMode === 'PLAYER' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
           >
-            Terminal Joueur
+            Action
           </button>
           <button 
             onClick={() => setCurrentViewMode('NOTEBOOK')}
             className={`py-2 rounded-xl transition border ${currentViewMode === 'NOTEBOOK' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
           >
-            Carnet d'Enquête
+            Carnet
+          </button>
+          <button 
+            onClick={() => setCurrentViewMode('MAP')}
+            className={`py-2 rounded-xl transition border ${currentViewMode === 'MAP' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
+          >
+            🗺️ Carte
           </button>
         </div>
       </header>
@@ -393,6 +393,41 @@ export default function App() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {currentViewMode === 'MAP' && (
+        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
+          <div className="flex justify-between items-center">
+            <h2 className="text-sm font-black text-white">🗺️ Plan Tactique du Musée</h2>
+            <span className="text-[10px] text-slate-400">Phase : {session.phase}</span>
+          </div>
+          <p className="text-[11px] text-slate-400">Visualisation des salles explorées, des détectives présents et des PNJ découverts.</p>
+
+          <div className="grid grid-cols-2 gap-2.5 pt-2">
+            {MUSEUM_ROOMS.map((room) => {
+              const detectivesInRoom = Object.values(session.players).filter((p: any) => p.currentRoomId === room.id);
+              return (
+                <div key={room.id} className="bg-[#0b0f17] border border-slate-800 p-3 rounded-xl space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-amber-400">Salle {room.id}</span>
+                    <span className="text-[10px] text-slate-500">Zone {room.id <= 5 ? 'Intérieure' : 'Extérieure'}</span>
+                  </div>
+                  <p className="text-slate-200 font-semibold text-xs">{room.name}</p>
+                  
+                  {detectivesInRoom.length > 0 && (
+                    <div className="pt-1 flex flex-wrap gap-1">
+                      {detectivesInRoom.map((d: any) => (
+                        <span key={d.id} className="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-2 py-0.5 rounded-md font-bold">
+                          📍 {d.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
