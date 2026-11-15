@@ -283,224 +283,225 @@ export default function App() {
 
             {/* Grille principale et panneau d'actions côte à côte */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* GRILLE DU PRISME PENTAGONAL (SALLES ACCESSIBLES FILTRÉES) */}
-            <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
-              <h2 className="text-lg font-semibold mb-2 text-slate-200">Plan Tactique du Musée (Prisme Pentagonal)</h2>
-              <p className="text-xs text-slate-400 mb-4">Les salles accessibles depuis votre position actuelle sont surlignées en vert.</p>
               
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {MUSEUM_ROOMS.map((room) => {
-                  const isPlayerHere = activePlayer.currentRoomId === room.id;
-                  const roomState = gameState.roomsState[room.id];
-                  const isHQ = room.id === 0;
-                  const currentRoomCfg = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
-                  
-                  // Calcul de l'accessibilité : QG central ou salle adjacente directe
-                  const isAccessible = isHQ || activePlayer.currentRoomId === 0 || currentRoomCfg?.adjacentRooms.includes(room.id);
-
-                  return (
-                    <div 
-                      key={room.id}
-                      onClick={() => {
-                        if (isAccessible && selectedAction === 'deplacer') {
-                          engine.movePlayer(activePlayer.id, room.id);
-                          refreshState();
-                        }
-                      }}
-                      className={`p-4 rounded-xl border transition-all ${
-                        isPlayerHere 
-                          ? 'border-amber-400 bg-amber-950/40 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400' 
-                          : isAccessible && selectedAction === 'deplacer'
-                            ? 'border-emerald-500 bg-slate-900 hover:border-emerald-400 cursor-pointer shadow-md shadow-emerald-500/20'
-                            : 'border-slate-800 bg-slate-950/80 opacity-60'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-xs font-mono text-slate-400 font-bold">#{room.id}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
-                          {getWingLabel(room.ring)}
-                        </span>
-                      </div>
-                      <h3 className="font-semibold text-sm text-slate-100 mb-1">{room.name}</h3>
-                      <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{room.description}</p>
-                      
-                      {roomState?.npcIds && roomState.npcIds.length > 0 && (
-                        <div className="mt-2 text-xs text-rose-400 flex flex-wrap gap-1">
-                          {roomState.npcIds.map((npcId: string) => {
-                            const s = SUSPECTS.find(item => item.id === npcId);
-                            return <span key={npcId} className="bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900 font-medium">👤 {s?.name}</span>;
-                          })}
-                        </div>
-                      )}
-
-                      {roomState?.searchedZones.length > 0 && (
-                        <div className="mt-2 text-[10px] text-slate-400 font-mono">
-                          Zones fouillées : {roomState.searchedZones.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* PANNEAU LATÉRAL : SÉLECTEUR D'ACTIONS & DÉ PHYSIQUE */}
-            <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
-                <h2 className="text-md font-semibold text-slate-200">
-                  Position actuelle : <span className="text-amber-400">{roomConfig?.name}</span>
-                </h2>
+              {/* GRILLE DU PRISME PENTAGONAL (SALLES ACCESSIBLES FILTRÉES) */}
+              <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6 shadow-xl">
+                <h2 className="text-lg font-semibold mb-2 text-slate-200">Plan Tactique du Musée (Prisme Pentagonal)</h2>
+                <p className="text-xs text-slate-400 mb-4">Les salles accessibles depuis votre position actuelle sont surlignées en vert.</p>
                 
-                {/* Sélecteur d'actions explicite */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sélectionner une Action :</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button 
-                      onClick={() => setSelectedAction('deplacer')}
-                      className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'deplacer' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
-                    >
-                      🚶 Déplacement
-                    </button>
-                    <button 
-                      onClick={() => setSelectedAction('fouiller_a')}
-                      className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_a' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
-                    >
-                      🔍 Fouiller Zone A
-                    </button>
-                    <button 
-                      onClick={() => setSelectedAction('fouiller_b')}
-                      className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_b' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
-                    >
-                      🔎 Fouiller Zone B
-                    </button>
-                    <button 
-                      onClick={() => setSelectedAction('interroger')}
-                      className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'interroger' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
-                    >
-                      💬 Interroger
-                    </button>
-                  </div>
-                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {MUSEUM_ROOMS.map((room) => {
+                    const isPlayerHere = activePlayer.currentRoomId === room.id;
+                    const roomState = gameState.roomsState[room.id];
+                    const isHQ = room.id === 0;
+                    const currentRoomCfg = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
+                    
+                    // Calcul de l'accessibilité : QG central ou salle adjacente directe
+                    const isAccessible = isHQ || activePlayer.currentRoomId === 0 || currentRoomCfg?.adjacentRooms.includes(room.id);
 
-                {/* Saisir le résultat du Dé Physique */}
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-slate-300 font-medium">Résultat du Dé Physique :</span>
-                    <span className="text-amber-400 font-bold text-lg bg-slate-900 px-3 py-0.5 rounded border border-slate-800">
-                      {dieResult !== null ? dieResult : '-'}
-                    </span>
-                  </div>
-                  <div className="flex gap-1 justify-between">
-                    {[1, 2, 3, 4, 5, 6].map((num) => (
-                      <button
-                        key={num}
-                        onClick={() => setDieResult(num)}
-                        className={`flex-1 py-1 rounded text-xs font-bold border transition ${dieResult === num ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm' : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'}`}
+                    return (
+                      <div 
+                        key={room.id}
+                        onClick={() => {
+                          if (isAccessible && selectedAction === 'deplacer') {
+                            engine.movePlayer(activePlayer.id, room.id);
+                            refreshState();
+                          }
+                        }}
+                        className={`p-4 rounded-xl border transition-all ${
+                          isPlayerHere 
+                            ? 'border-amber-400 bg-amber-950/40 shadow-lg shadow-amber-500/20 ring-1 ring-amber-400' 
+                            : isAccessible && selectedAction === 'deplacer'
+                              ? 'border-emerald-500 bg-slate-900 hover:border-emerald-400 cursor-pointer shadow-md shadow-emerald-500/20'
+                              : 'border-slate-800 bg-slate-950/80 opacity-60'
+                        }`}
                       >
-                        {num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-xs font-mono text-slate-400 font-bold">#{room.id}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-medium">
+                            {getWingLabel(room.ring)}
+                          </span>
+                        </div>
+                        <h3 className="font-semibold text-sm text-slate-100 mb-1">{room.name}</h3>
+                        <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{room.description}</p>
+                        
+                        {roomState?.npcIds && roomState.npcIds.length > 0 && (
+                          <div className="mt-2 text-xs text-rose-400 flex flex-wrap gap-1">
+                            {roomState.npcIds.map((npcId: string) => {
+                              const s = SUSPECTS.find(item => item.id === npcId);
+                              return <span key={npcId} className="bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-900 font-medium">👤 {s?.name}</span>;
+                            })}
+                          </div>
+                        )}
 
-                {/* Exécution de l'action sélectionnée */}
-                <div className="space-y-3 pt-2">
-                  {selectedAction === 'fouiller_a' && (
-                    <button 
-                      onClick={() => {
-                        const res = engine.searchRoomZone(activePlayer.id, 'A');
-                        if (res.success && res.foundItem) {
-                          engine.sendItemToHQ(res.foundItem);
-                        }
-                        refreshState();
-                      }}
-                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
-                    >
-                      Exécuter la Fouille Zone A (1 PA)
-                    </button>
-                  )}
-
-                  {selectedAction === 'fouiller_b' && (
-                    <button 
-                      onClick={() => {
-                        engine.searchRoomZone(activePlayer.id, 'B');
-                        refreshState();
-                      }}
-                      className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
-                    >
-                      Exécuter la Fouille Zone B (1 PA)
-                    </button>
-                  )}
-
-                  {selectedAction === 'interroger' && currentRoomState?.npcIds.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-slate-400 font-semibold">Choisir un suspect dans la salle :</p>
-                      {currentRoomState.npcIds.map((npcId: string) => {
-                        const npc = SUSPECTS.find(s => s.id === npcId);
-                        return (
-                          <button
-                            key={npcId}
-                            onClick={() => {
-                              const res = engine.performInterrogation(activePlayer.id, npcId);
-                              setInterrogateFeedback(`${npc?.name} : ${res.testimonial}`);
-                              refreshState();
-                            }}
-                            className="w-full bg-rose-950/50 hover:bg-rose-950 border border-rose-900 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left font-medium"
-                          >
-                            💬 Interroger {npc?.name} (1 PA)
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {selectedAction === 'deplacer' && (
-                    <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-center text-xs text-slate-400 italic">
-                      Cliquez directement sur une salle voisine en surbrillance verte sur la carte pour vous y déplacer.
-                    </div>
-                  )}
-
-                  {interrogateFeedback && (
-                    <div className="bg-rose-950/30 border border-rose-900 p-3 rounded-lg text-xs text-rose-300 italic">
-                      {interrogateFeedback}
-                    </div>
-                  )}
-
-                  {/* Rôle Technicien : Analyse sur place */}
-                  {activePlayer.role === 'technicien' && currentRoomState?.weaponId && (
-                    <button 
-                      onClick={() => {
-                        engine.analyzeItem(currentRoomState.weaponId!);
-                        refreshState();
-                      }}
-                      className="w-full bg-indigo-900/60 hover:bg-indigo-900 text-xs font-semibold py-2 px-3 rounded-lg border border-indigo-700 transition text-left text-indigo-200"
-                    >
-                      🔬 Analyser l'arme sur place (Technicien)
-                    </button>
-                  )}
-
-                  <button 
-                    onClick={() => {
-                      engine.nextTurn();
-                      setInterrogateFeedback(null);
-                      refreshState();
-                    }}
-                    className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold py-2.5 px-3 rounded-lg transition text-white shadow-lg shadow-emerald-900/20"
-                  >
-                    ▶️ Terminer le Tour / Déplacer les PNJ
-                  </button>
-
-                  <button 
-                    onClick={() => setAccusationModal(true)}
-                    className="w-full bg-amber-600/80 hover:bg-amber-600 text-sm font-semibold py-2 px-3 rounded-lg transition text-slate-950"
-                  >
-                    ⚖️ Formuler une Accusation
-                  </button>
+                        {roomState?.searchedZones.length > 0 && (
+                          <div className="mt-2 text-[10px] text-slate-400 font-mono">
+                            Zones fouillées : {roomState.searchedZones.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* PANNEAU LATÉRAL : SÉLECTEUR D'ACTIONS & DÉ PHYSIQUE */}
+              <div className="space-y-6">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <h2 className="text-md font-semibold text-slate-200">
+                    Position actuelle : <span className="text-amber-400">{roomConfig?.name}</span>
+                  </h2>
+                  
+                  {/* Sélecteur d'actions explicite */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sélectionner une Action :</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button 
+                        onClick={() => setSelectedAction('deplacer')}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'deplacer' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                      >
+                        🚶 Déplacement
+                      </button>
+                      <button 
+                        onClick={() => setSelectedAction('fouiller_a')}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_a' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                      >
+                        🔍 Fouiller Zone A
+                      </button>
+                      <button 
+                        onClick={() => setSelectedAction('fouiller_b')}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'fouiller_b' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                      >
+                        🔎 Fouiller Zone B
+                      </button>
+                      <button 
+                        onClick={() => setSelectedAction('interroger')}
+                        className={`p-2.5 rounded-lg text-xs font-semibold border transition ${selectedAction === 'interroger' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750'}`}
+                      >
+                        💬 Interroger
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Saisir le résultat du Dé Physique */}
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-300 font-medium">Résultat du Dé Physique :</span>
+                      <span className="text-amber-400 font-bold text-lg bg-slate-900 px-3 py-0.5 rounded border border-slate-800">
+                        {dieResult !== null ? dieResult : '-'}
+                      </span>
+                    </div>
+                    <div className="flex gap-1 justify-between">
+                      {[1, 2, 3, 4, 5, 6].map((num) => (
+                        <button
+                          key={num}
+                          onClick={() => setDieResult(num)}
+                          className={`flex-1 py-1 rounded text-xs font-bold border transition ${dieResult === num ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm' : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'}`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Exécution de l'action sélectionnée */}
+                  <div className="space-y-3 pt-2">
+                    {selectedAction === 'fouiller_a' && (
+                      <button 
+                        onClick={() => {
+                          const res = engine.searchRoomZone(activePlayer.id, 'A');
+                          if (res.success && res.foundItem) {
+                            engine.sendItemToHQ(res.foundItem);
+                          }
+                          refreshState();
+                        }}
+                        className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
+                      >
+                        Exécuter la Fouille Zone A (1 PA)
+                      </button>
+                    )}
+
+                    {selectedAction === 'fouiller_b' && (
+                      <button 
+                        onClick={() => {
+                          engine.searchRoomZone(activePlayer.id, 'B');
+                          refreshState();
+                        }}
+                        className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-semibold py-2.5 rounded-lg text-sm transition shadow"
+                      >
+                        Exécuter la Fouille Zone B (1 PA)
+                      </button>
+                    )}
+
+                    {selectedAction === 'interroger' && currentRoomState?.npcIds.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-slate-400 font-semibold">Choisir un suspect dans la salle :</p>
+                        {currentRoomState.npcIds.map((npcId: string) => {
+                          const npc = SUSPECTS.find(s => s.id === npcId);
+                          return (
+                            <button
+                              key={npcId}
+                              onClick={() => {
+                                const res = engine.performInterrogation(activePlayer.id, npcId);
+                                setInterrogateFeedback(`${npc?.name} : ${res.testimonial}`);
+                                refreshState();
+                              }}
+                              className="w-full bg-rose-950/50 hover:bg-rose-950 border border-rose-900 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left font-medium"
+                            >
+                              💬 Interroger {npc?.name} (1 PA)
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedAction === 'deplacer' && (
+                      <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800 text-center text-xs text-slate-400 italic">
+                        Cliquez directement sur une salle voisine en surbrillance verte sur la carte pour vous y déplacer.
+                      </div>
+                    )}
+
+                    {interrogateFeedback && (
+                      <div className="bg-rose-950/30 border border-rose-900 p-3 rounded-lg text-xs text-rose-300 italic">
+                        {interrogateFeedback}
+                      </div>
+                    )}
+
+                    {/* Rôle Technicien : Analyse sur place */}
+                    {activePlayer.role === 'technicien' && currentRoomState?.weaponId && (
+                      <button 
+                        onClick={() => {
+                          engine.analyzeItem(currentRoomState.weaponId!);
+                          refreshState();
+                        }}
+                        className="w-full bg-indigo-900/60 hover:bg-indigo-900 text-xs font-semibold py-2 px-3 rounded-lg border border-indigo-700 transition text-left text-indigo-200"
+                      >
+                        🔬 Analyser l'arme sur place (Technicien)
+                      </button>
+                    )}
+
+                    <button 
+                      onClick={() => {
+                        engine.nextTurn();
+                        setInterrogateFeedback(null);
+                        refreshState();
+                      }}
+                      className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold py-2.5 px-3 rounded-lg transition text-white shadow-lg shadow-emerald-900/20"
+                    >
+                      ▶️ Terminer le Tour / Déplacer les PNJ
+                    </button>
+
+                    <button 
+                      onClick={() => setAccusationModal(true)}
+                      className="w-full bg-amber-600/80 hover:bg-amber-600 text-sm font-semibold py-2 px-3 rounded-lg transition text-slate-950"
+                    >
+                      ⚖️ Formuler une Accusation
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
-          </div>
           </div>
         )}
 
