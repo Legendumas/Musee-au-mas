@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, MatrixColumn, TriState, RoleId } from './gameEngine';
 
-// Coordonnées géométriques du Prisme Pentagonal (QG au centre + anneau intérieur 1-5 + anneau extérieur 6-10)
+// Coordonnées géométriques exactes du Prisme Pentagonal (QG au centre + anneau intérieur 1-5 + anneau extérieur 6-10)
 const ROOM_COORDS: Record<number, { x: number; y: number; ring: 'QG' | 'INNER' | 'OUTER' }> = {
   0:  { x: 200, y: 190, ring: 'QG' },
-  // Pentagone Intérieur (rayon ~72)
   1:  { x: 200, y: 118, ring: 'INNER' },
   2:  { x: 268, y: 168, ring: 'INNER' },
   3:  { x: 242, y: 248, ring: 'INNER' },
   4:  { x: 158, y: 248, ring: 'INNER' },
   5:  { x: 132, y: 168, ring: 'INNER' },
-  // Pentagone Extérieur (rayon ~148)
   6:  { x: 200, y: 42,  ring: 'OUTER' },
   7:  { x: 341, y: 144, ring: 'OUTER' },
   8:  { x: 287, y: 310, ring: 'OUTER' },
@@ -18,13 +16,9 @@ const ROOM_COORDS: Record<number, { x: number; y: number; ring: 'QG' | 'INNER' |
   10: { x: 59,  y: 144, ring: 'OUTER' },
 };
 
-// Liaisons exactes du prisme pentagonal (3 liaisons standard par salle)
 const PRISM_EDGES: [number, number][] = [
-  // Anneau intérieur
   [1, 2], [2, 3], [3, 4], [4, 5], [5, 1],
-  // Anneau extérieur
   [6, 7], [7, 8], [8, 9], [9, 10], [10, 6],
-  // Rayons reliant l'anneau intérieur à l'anneau extérieur
   [1, 6], [2, 7], [3, 8], [4, 9], [5, 10],
 ];
 
@@ -113,10 +107,28 @@ export default function App() {
   };
 
   const activePlayer = session?.players[selectedPlayerId];
-  // Depuis le QG (Salle 0), accès aux 5 salles du pentagone intérieur (1 à 5)
   const availableRooms = activePlayer?.currentRoomId === 0 
     ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 5) 
     : MUSEUM_ROOMS;
+
+  // Calcul des compteurs d'enquête pour la console MJ
+  const discoveredSuspectsCount = session?.notebook?.discoveredSuspectIds?.length || 0;
+  const totalSuspects = SUSPECTS.length;
+  
+  // Compter les armes et indices trouvés dans les salles
+  let foundWeapons = 0;
+  let foundClues = 0;
+  if (session?.roomsState) {
+    Object.values(session.roomsState).forEach((room: any) => {
+      ['A', 'B'].forEach((zoneKey) => {
+        const zone = room.zones[zoneKey];
+        if (zone.isSearched) {
+          if (zone.contentType === 'WEAPON') foundWeapons++;
+          if (zone.contentType === 'MOTIVE_CLUE') foundClues++;
+        }
+      });
+    });
+  }
 
   if (appMode === 'SETUP' || !session || !engine) {
     return (
@@ -199,13 +211,14 @@ export default function App() {
     );
   }
 
+  // --- CONSOLE D'ARBITRAGE MJ (AVEC COMPTEURS ET PLAN TACTIQUE) ---
   if (appMode === 'GM_CONSOLE') {
     return (
-      <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
-        <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl mb-4 shadow-xl flex justify-between items-center">
+      <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto space-y-4">
+        <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl shadow-xl flex justify-between items-center">
           <div>
             <h1 className="text-base font-black text-indigo-400">Console d'Arbitrage MJ</h1>
-            <p className="text-[11px] text-slate-400">Espace exclusif réservé au Maître du Jeu</p>
+            <p className="text-[11px] text-slate-400">Suivi global de l'enquête & validation</p>
           </div>
           <button 
             onClick={() => setAppMode('PLAYER_TERMINAL')}
@@ -215,12 +228,32 @@ export default function App() {
           </button>
         </header>
 
+        {/* Compteurs de suivi MJ */}
+        <div className="grid grid-cols-3 gap-2.5 text-xs">
+          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Personnages</span>
+            <span className="text-lg font-black text-amber-400">{discoveredSuspectsCount} / {totalSuspects}</span>
+            <span className="text-[9px] text-slate-500 block">découverts</span>
+          </div>
+          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Armes</span>
+            <span className="text-lg font-black text-emerald-400">{foundWeapons} / 10</span>
+            <span className="text-[9px] text-slate-500 block">trouvées</span>
+          </div>
+          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Indices Motifs</span>
+            <span className="text-lg font-black text-indigo-400">{foundClues} / 6</span>
+            <span className="text-[9px] text-slate-500 block">analysés</span>
+          </div>
+        </div>
+
         <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
           <div className="bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-900/50">
-            <p className="font-bold text-indigo-300 uppercase text-[10px]">🔒 Solution Secrète :</p>
+            <p className="font-bold text-indigo-300 uppercase text-[10px]">🔒 Solution Secrète (Confidentiel MJ) :</p>
             <p className="text-slate-300 mt-1">
               Meurtrier : <span className="text-amber-400 font-bold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span><br />
-              Arme : <span className="text-amber-400 font-bold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span>
+              Arme : <span className="text-amber-400 font-bold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span><br />
+              Salle du Crime : <span className="text-amber-400 font-bold">Salle {session.secretSolution.crimeSceneRoomId}</span>
             </p>
           </div>
 
@@ -239,6 +272,32 @@ export default function App() {
             ) : (
               <p className="text-slate-500 italic text-center py-6">Aucune action en attente de validation...</p>
             )}
+          </div>
+        </div>
+
+        {/* Le MJ a également accès au plan tactique global */}
+        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3 text-xs">
+          <h2 className="text-sm font-black text-white">🗺️ Vue Globale du Plateau (Contrôle MJ)</h2>
+          <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center relative">
+            <svg viewBox="0 0 400 350" className="w-full max-w-sm h-auto">
+              {[1, 2, 3, 4, 5].map((id) => (
+                <line key={`qg-gm-${id}`} x1={ROOM_COORDS[0].x} y1={ROOM_COORDS[0].y} x2={ROOM_COORDS[id].x} y2={ROOM_COORDS[id].y} stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.45" />
+              ))}
+              {PRISM_EDGES.map(([from, to], idx) => (
+                <line key={`edge-gm-${idx}`} x1={ROOM_COORDS[from].x} y1={ROOM_COORDS[from].y} x2={ROOM_COORDS[to].x} y2={ROOM_COORDS[to].y} stroke="#475569" strokeWidth="1.6" />
+              ))}
+              {Object.entries(ROOM_COORDS).map(([idStr, pos]) => {
+                const roomId = Number(idStr);
+                const detectivesInRoom = Object.values(session.players).filter((p: any) => p.currentRoomId === roomId);
+                const isQg = roomId === 0;
+                return (
+                  <g key={roomId} transform={`translate(${pos.x}, ${pos.y})`}>
+                    <circle r={isQg ? 24 : 18} fill={detectivesInRoom.length > 0 ? '#312e81' : '#111827'} stroke={detectivesInRoom.length > 0 ? '#818cf8' : '#475569'} strokeWidth="1.5" />
+                    <text y="3" textAnchor="middle" fill="#f8fafc" fontSize="9" fontWeight="bold">{isQg ? 'QG' : `S.${roomId}`}</text>
+                  </g>
+                );
+              })}
+            </svg>
           </div>
         </div>
       </div>
@@ -378,7 +437,7 @@ export default function App() {
             ) : (
               <button 
                 onClick={handlePlayerSubmit}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-xl transition shadow text-xs uppercase tracking-wider mt-1"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl transition shadow text-xs uppercase tracking-wider mt-1"
               >
                 Soumettre l'action au MJ ⚡
               </button>
@@ -434,35 +493,12 @@ export default function App() {
 
           <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden">
             <svg viewBox="0 0 400 350" className="w-full max-w-sm h-auto">
-              {/* Liaisons pointillées depuis le QG (0) vers l'anneau intérieur (1 à 5) */}
               {[1, 2, 3, 4, 5].map((id) => (
-                <line
-                  key={`qg-${id}`}
-                  x1={ROOM_COORDS[0].x}
-                  y1={ROOM_COORDS[0].y}
-                  x2={ROOM_COORDS[id].x}
-                  y2={ROOM_COORDS[id].y}
-                  stroke="#f59e0b"
-                  strokeWidth="1.2"
-                  strokeDasharray="3 3"
-                  opacity="0.45"
-                />
+                <line key={`qg-${id}`} x1={ROOM_COORDS[0].x} y1={ROOM_COORDS[0].y} x2={ROOM_COORDS[id].x} y2={ROOM_COORDS[id].y} stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.45" />
               ))}
-
-              {/* Liaisons standard du prisme pentagonal (3 par salle) */}
               {PRISM_EDGES.map(([from, to], idx) => (
-                <line
-                  key={`edge-${idx}`}
-                  x1={ROOM_COORDS[from].x}
-                  y1={ROOM_COORDS[from].y}
-                  x2={ROOM_COORDS[to].x}
-                  y2={ROOM_COORDS[to].y}
-                  stroke="#475569"
-                  strokeWidth="1.6"
-                />
+                <line key={`edge-${idx}`} x1={ROOM_COORDS[from].x} y1={ROOM_COORDS[from].y} x2={ROOM_COORDS[to].x} y2={ROOM_COORDS[to].y} stroke="#475569" strokeWidth="1.6" />
               ))}
-
-              {/* Nœuds des salles (0 à 10) */}
               {Object.entries(ROOM_COORDS).map(([idStr, pos]) => {
                 const roomId = Number(idStr);
                 const isOccupied = Object.values(session.players).some((p: any) => p.currentRoomId === roomId);
@@ -471,49 +507,12 @@ export default function App() {
 
                 return (
                   <g key={roomId} transform={`translate(${pos.x}, ${pos.y})`}>
-                    <circle
-                      r={radius}
-                      fill={isOccupied ? '#312e81' : isQg ? '#1e1b4b' : '#111827'}
-                      stroke={isOccupied ? '#818cf8' : isQg ? '#f59e0b' : '#475569'}
-                      strokeWidth={isOccupied || isQg ? '2' : '1.5'}
-                    />
-                    <text y="3" textAnchor="middle" fill={isQg ? '#fbbf24' : '#f8fafc'} fontSize={isQg ? '10' : '9'} fontWeight="bold">
-                      {isQg ? 'QG' : `S.${roomId}`}
-                    </text>
+                    <circle r={radius} fill={isOccupied ? '#312e81' : isQg ? '#1e1b4b' : '#111827'} stroke={isOccupied ? '#818cf8' : isQg ? '#f59e0b' : '#475569'} strokeWidth={isOccupied || isQg ? '2' : '1.5'} />
+                    <text y="3" textAnchor="middle" fill={isQg ? '#fbbf24' : '#f8fafc'} fontSize={isQg ? '10' : '9'} fontWeight="bold">{isQg ? 'QG' : `S.${roomId}`}</text>
                   </g>
                 );
               })}
             </svg>
-            <div className="flex gap-4 text-[10px] text-slate-400 mt-1">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-amber-500 inline-block"></span> Départ QG (1–5)</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-slate-500 inline-block"></span> 3 Liaisons / salle</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block"></span> Détective</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            {MUSEUM_ROOMS.map((room) => {
-              const detectivesInRoom = Object.values(session.players).filter((p: any) => p.currentRoomId === room.id);
-              return (
-                <div key={room.id} className="bg-[#0b0f17] border border-slate-800 p-2.5 rounded-xl space-y-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-amber-400">Salle {room.id}</span>
-                    <span className="text-[9px] text-slate-500">{room.id === 0 ? 'QG Central' : room.id <= 5 ? 'Intérieur' : 'Extérieur'}</span>
-                  </div>
-                  <p className="text-slate-200 font-semibold text-[11px] truncate">{room.name}</p>
-                  
-                  {detectivesInRoom.length > 0 && (
-                    <div className="flex flex-wrap gap-1 pt-0.5">
-                      {detectivesInRoom.map((d: any) => (
-                        <span key={d.id} className="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[9px] px-1.5 py-0.5 rounded font-bold">
-                          📍 {d.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
           </div>
         </div>
       )}
