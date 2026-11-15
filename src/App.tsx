@@ -159,8 +159,11 @@ export default function App() {
   }
 
   // ----------------------------------------------------
-  // ÉCRAN 2 : PLATEAU DE JEU PRINCIPAL
+  // ÉCRAN 2 : PLATEAU DE JEU PRINCIPAL (Sécurisé)
   // ----------------------------------------------------
+  if (!gameState || !engine) {
+    return null; // Évite le plantage si l'état n'est pas encore initialisé
+  }
   const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
   const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
   const roomConfig = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
