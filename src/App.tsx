@@ -86,9 +86,9 @@ export default function App() {
   };
 
   const activePlayer = session?.players[selectedPlayerId];
-  // Une fois qu'on a bougé au moins une fois (ou selon la règle), on peut cibler plus largement ou garder la restriction QG
+  // Correction : depuis le QG (Salle 0), accès aux 5 salles du pentagone intérieur (1 à 5)
   const availableRooms = activePlayer?.currentRoomId === 0 
-    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 4) 
+    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 5) 
     : MUSEUM_ROOMS;
 
   if (appMode === 'SETUP' || !session || !engine) {
@@ -315,7 +315,7 @@ export default function App() {
             {actionType === 'MOVE' && (
               <div className="pt-2">
                 <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1">
-                  {activePlayer.currentRoomId === 0 ? 'Salle cible (Aile intérieure depuis le QG) :' : 'Salle cible adjacente :'}
+                  {activePlayer.currentRoomId === 0 ? 'Salle cible (Pentagone intérieur depuis le QG) :' : 'Salle cible adjacente :'}
                 </label>
                 <select 
                   value={targetRoom} 
@@ -351,7 +351,7 @@ export default function App() {
             ) : (
               <button 
                 onClick={handlePlayerSubmit}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl transition shadow text-xs uppercase tracking-wider mt-1"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-xl transition shadow text-xs uppercase tracking-wider mt-1"
               >
                 Soumettre l'action au MJ ⚡
               </button>
@@ -400,26 +400,65 @@ export default function App() {
       {currentViewMode === 'MAP' && (
         <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
           <div className="flex justify-between items-center">
-            <h2 className="text-sm font-black text-white">🗺️ Plan Tactique du Musée</h2>
-            <span className="text-[10px] text-slate-400">Phase : {session.phase}</span>
+            <h2 className="text-sm font-black text-white">🗺️ Plan Tactique du Musée (Prisme Pentagonal)</h2>
+            <span className="text-[10px] text-slate-400">Tour {session.turnNumber}</span>
           </div>
-          <p className="text-[11px] text-slate-400">Visualisation des salles explorées, des détectives présents et des PNJ découverts.</p>
+          <p className="text-[11px] text-slate-400">Visualisation schématique des anneaux concentriques et position des enquêteurs.</p>
 
-          <div className="grid grid-cols-2 gap-2.5 pt-2">
+          {/* Représentation Visuelle Schématique SVG du Prisme Pentagonal */}
+          <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center relative overflow-hidden">
+            <svg viewBox="0 0 400 360" className="w-full max-w-sm h-auto">
+              {/* Lignes de liaisons QG (0) vers anneau intérieur (1 à 5) */}
+              {[
+                { x: 200, y: 110 }, { x: 285, y: 170 }, { x: 250, y: 265 }, { x: 150, y: 265 }, { x: 115, y: 170 }
+              ].coor?.length ?? [
+                [200, 110], [285, 170], [250, 265], [150, 265], [115, 170]
+              ].map(([x, y], idx) => (
+                <line key={`qg-${idx}`} x1="200" y1="190" x2={x} y2={y} stroke="#4f46e5" strokeWidth="1.5" strokeDasharray="4" opacity="0.6" />
+              ))}
+
+              {/* QG Central (Salle 0) */}
+              <g transform="translate(200, 190)">
+                <circle r="28" fill="#1e1b4b" stroke="#6366f1" strokeWidth="2" />
+                <text y="-4" textAnchor="middle" fill="#818cf8" fontSize="10" fontWeight="bold">QG (0)</text>
+                <text y="9" textAnchor="middle" fill="#94a3b8" fontSize="8">Central</text>
+              </g>
+
+              {/* Salles Anneau Intérieur (1 à 5) */}
+              {[
+                { id: 1, name: "Galerie Antiques", x: 200, y: 75 },
+                { id: 2, name: "Galerie Est", x: 305, y: 150 },
+                { id: 3, name: "Salle Armures", x: 265, y: 275 },
+                { id: 4, name: "Bibliothèque", x: 135, y: 275 },
+                { id: 5, name: "Salle Sculptures", x: 95, y: 150 },
+              ].map((room) => {
+                const isOccupied = Object.values(session.players).some((p: any) => p.currentRoomId === room.id);
+                return (
+                  <g key={room.id} transform={`translate(${room.x}, ${room.y})`}>
+                    <circle r="22" fill={isOccupied ? "#312e81" : "#111827"} stroke={isOccupied ? "#818cf8" : "#334155"} strokeWidth="2" />
+                    <text y="-3" textAnchor="middle" fill="#f8fafc" fontSize="9" fontWeight="bold">S.{room.id}</text>
+                  </g>
+                );
+              })}
+            </svg>
+            <span className="text-[10px] text-slate-500 italic mt-2">QG au centre · Pentagone intérieur (Salles 1 à 5) & Extérieur (6 à 10)</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-2">
             {MUSEUM_ROOMS.map((room) => {
               const detectivesInRoom = Object.values(session.players).filter((p: any) => p.currentRoomId === room.id);
               return (
-                <div key={room.id} className="bg-[#0b0f17] border border-slate-800 p-3 rounded-xl space-y-1.5">
+                <div key={room.id} className="bg-[#0b0f17] border border-slate-800 p-2.5 rounded-xl space-y-1">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-amber-400">Salle {room.id}</span>
-                    <span className="text-[10px] text-slate-500">Zone {room.id <= 5 ? 'Intérieure' : 'Extérieure'}</span>
+                    <span className="text-[9px] text-slate-500">{room.id === 0 ? 'QG' : room.id <= 5 ? 'Intérieur' : 'Extérieur'}</span>
                   </div>
-                  <p className="text-slate-200 font-semibold text-xs">{room.name}</p>
+                  <p className="text-slate-200 font-semibold text-[11px] truncate">{room.name}</p>
                   
                   {detectivesInRoom.length > 0 && (
-                    <div className="pt-1 flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1 pt-0.5">
                       {detectivesInRoom.map((d: any) => (
-                        <span key={d.id} className="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px] px-2 py-0.5 rounded-md font-bold">
+                        <span key={d.id} className="bg-indigo-950 text-indigo-300 border border-indigo-800 text-[9px] px-1.5 py-0.2 rounded font-bold">
                           📍 {d.name}
                         </span>
                       ))}
