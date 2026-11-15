@@ -1,73 +1,29 @@
-// ============================================================================
-// SUPER CLUEDO : ÉDITION MUSÉE (V2) — MOTEUR MÉTIER
-// ============================================================================
+// ==========================================
+// SUPER CLUEDO - ÉDITION MUSÉE (GAME ENGINE COMPLET)
+// ==========================================
 
-export type Wing = 'HQ' | 'WEST' | 'EAST';
-export type Gender = 'M' | 'F';
-export type Status = 'EMPLOYEE' | 'VISITOR';
-export type RoleId = 'VETERAN' | 'PROFILER' | 'FORENSIC' | 'NEGOTIATOR' | 'GEEK';
-export type MatrixColumn = 'GENDER' | 'STATUS' | 'TITLE' | 'LETTER_O';
-export type TriState = 'NSP' | 'YES' | 'NO';
-export type GamePhase = 'LOBBY' | 'INVESTIGATION' | 'MANHUNT' | 'VICTORY' | 'DEFEAT';
-export type ActionType = 'MOVE' | 'SEARCH' | 'INTERROGATE' | 'ANALYZE' | 'ACCUSE' | 'ARREST';
+export type RoleType = 'profileuse' | 'veteran' | 'technicien' | 'analyste';
 
 export interface RoomConfig {
   id: number;
   name: string;
-  wing: Wing;
+  ring: 'inner' | 'outer' | 'hq';
   adjacentRooms: number[];
-  crossingId: string | null;
 }
 
 export interface Suspect {
   id: string;
   name: string;
-  gender: Gender;
-  status: Status;
-  hasTitle: boolean;
-  hasLetterO: boolean;
+  title: string;
+  role: string;
 }
 
 export interface Weapon {
   id: string;
   name: string;
-  woundSignature: string;
 }
 
-export interface ClueStage {
-  stageNumber: number;
-  type: string;
-  rawText: string;
-  unlockColumn?: MatrixColumn;
-}
-
-export interface Motive {
-  id: string;
-  name: string;
-  stages: ClueStage[];
-}
-
-export interface ZoneState {
-  contentType: 'WEAPON' | 'MOTIVE_CLUE' | 'DECOY_CLUE' | 'EMPTY';
-  itemId: string | null;
-  stageNumber?: number;
-  isSearched: boolean;
-  cumulativeSearchScore: number;
-  isAnalyzed: boolean;
-  isDestroyed: boolean;
-}
-
-export interface RoomState {
-  id: number;
-  isVisited: boolean;
-  npcIds: string[];
-  zones: {
-    A: ZoneState;
-    B: ZoneState;
-  };
-}
-
-export interface NpcMovementRecord {
+export interface NpcMovement {
   npcId: string;
   initialRoomId: number;
   finalRoomId: number;
@@ -77,364 +33,313 @@ export interface NpcMovementRecord {
 export interface PlayerState {
   id: string;
   name: string;
-  roleId: RoleId;
+  role: RoleType;
   currentRoomId: number;
-  remainingAP: number;
-  rerollUsedThisTurn: boolean;
+  actionPoints: number;
+  maxActionPoints: number;
 }
 
-export interface PendingAction {
-  id: string;
-  playerId: string;
-  playerName: string;
-  roleId: RoleId;
-  actionType: ActionType;
-  targetRoomId?: number;
-  targetZone?: 'A' | 'B';
-  targetNpcId?: string;
-  accusationPayload?: {
-    killerId: string;
+export interface RoomState {
+  roomId: number;
+  npcIds: string[];
+  weaponId?: string;
+  searchedZones: ('A' | 'B')[];
+  clueIds: string[];
+}
+
+export interface GameSession {
+  turn: number;
+  activePlayerId: string;
+  phase: 'investigation' | 'chase' | 'victory' | 'defeat';
+  secretSolution: {
+    murdererId: string;
     weaponId: string;
     roomId: number;
     motiveId: string;
   };
-  rawDiceRoll: number;
-  secretGmVerdict: string;
-  isCriticalAlert: boolean;
-}
-
-export interface ManhuntState {
-  isActive: boolean;
-  killerCurrentRoomId: number;
-  roomsTraversedCount: number;
-  maxRoomsAllowed: number;
-  visitedHistory: number[];
-  isHoldingPosition: boolean;
-  lastLog: string;
-}
-
-export interface UnifiedGameSession {
-  sessionId: string;
-  phase: GamePhase;
-  turnNumber: number;
-  turnOrder: string[];
-  activePlayerId: string;
-  geekTimerEndTimestamp: number | null;
-  secretSolution: {
-    killerId: string;
-    weaponId: string;
-    crimeSceneRoomId: number;
-    motiveId: string;
-    crimeWing: 'WEST' | 'EAST';
-  };
   players: Record<string, PlayerState>;
   roomsState: Record<number, RoomState>;
-  npcMovements: Record<string, NpcMovementRecord>;
-  nextMotiveStageToDistribute: number;
-  notebook: {
-    visibleColumns: Record<MatrixColumn, boolean>;
-    discoveredSuspectIds: string[];
-    playerNotes: Record<string, Record<MatrixColumn, TriState>>;
-    eliminatedSuspectIds: string[];
-    publicCluesLog: { turn: number; text: string }[];
-  };
-  pendingAction: PendingAction | null;
-  manhunt: ManhuntState;
+  npcMovements: Record<string, NpcMovement>;
+  analyzedClues: string[];
+  hqInbox: string[];
 }
 
+// ------------------------------------------
+// CONSTANTES DU PLATEAU (Prisme Pentagonal)
+// ------------------------------------------
 export const MUSEUM_ROOMS: RoomConfig[] = [
-  { id: 0, name: 'QG Central (Surveillance)', wing: 'HQ', adjacentRooms: [6, 7, 8, 9, 10], crossingId: null },
-  { id: 1, name: 'Galerie des Antiques', wing: 'WEST', adjacentRooms: [5, 2, 6], crossingId: 'T1' },
-  { id: 2, name: 'Salon des Horloges', wing: 'WEST', adjacentRooms: [1, 3, 7], crossingId: 'T5' },
-  { id: 3, name: 'Salle des Armures', wing: 'WEST', adjacentRooms: [2, 4, 8], crossingId: 'T2' },
-  { id: 4, name: 'Cabinet des Estampes', wing: 'WEST', adjacentRooms: [3, 5, 9], crossingId: 'T3' },
-  { id: 5, name: 'Rotonde Renaissance', wing: 'WEST', adjacentRooms: [4, 1, 10], crossingId: 'T4' },
-  { id: 6, name: 'Verrière Contemporaine', wing: 'EAST', adjacentRooms: [10, 7, 1, 0], crossingId: 'T1' },
-  { id: 7, name: 'Salle des Joyaux', wing: 'EAST', adjacentRooms: [6, 8, 2, 0], crossingId: 'T5' },
-  { id: 8, name: 'Réserve Technique', wing: 'EAST', adjacentRooms: [7, 9, 3, 0], crossingId: 'T2' },
-  { id: 9, name: 'Bibliothèque Historique', wing: 'EAST', adjacentRooms: [8, 10, 4, 0], crossingId: 'T3' },
-  { id: 10, name: 'Galerie des Donateurs', wing: 'EAST', adjacentRooms: [9, 6, 5, 0], crossingId: 'T4' },
+  { id: 0, name: 'QG Central', ring: 'hq', adjacentRooms: [1, 2, 3, 4, 5] },
+  // Anneau Intérieur (1-5)
+  { id: 1, name: 'Galerie des Antiques', ring: 'inner', adjacentRooms: [0, 2, 5, 6] },
+  { id: 2, name: 'Salon des Horloges', ring: 'inner', adjacentRooms: [0, 1, 3, 7] },
+  { id: 3, name: 'Salle des Armures', ring: 'inner', adjacentRooms: [0, 2, 4, 8] },
+  { id: 4, name: 'Rotonde des Peintures', ring: 'inner', adjacentRooms: [0, 3, 5, 9] },
+  { id: 5, name: 'Bibliothèque Ancienne', ring: 'inner', adjacentRooms: [0, 1, 4, 10] },
+  // Anneau Extérieur (6-10)
+  { id: 6, name: 'Atelier de Restauration', ring: 'outer', adjacentRooms: [1, 7, 10] },
+  { id: 7, name: 'Serre Botanique', ring: 'outer', adjacentRooms: [2, 6, 8] },
+  { id: 8, name: 'Réserve Technique', ring: 'outer', adjacentRooms: [3, 7, 9] },
+  { id: 9, name: 'Crypte Souterraine', ring: 'outer', adjacentRooms: [4, 8, 10] },
+  { id: 10, name: 'Observatoire du Dôme', ring: 'outer', adjacentRooms: [5, 6, 9] },
 ];
 
 export const SUSPECTS: Suspect[] = [
-  { id: 'S1', name: 'Éléonore Vance', gender: 'F', status: 'EMPLOYEE', hasTitle: true, hasLetterO: true },
-  { id: 'S2', name: 'Victor Moreau', gender: 'M', status: 'VISITOR', hasTitle: false, hasLetterO: true },
-  { id: 'S3', name: 'Dr. Claire Sterling', gender: 'F', status: 'EMPLOYEE', hasTitle: true, hasLetterO: false },
-  { id: 'S4', name: 'Arthur Pendelton', gender: 'M', status: 'VISITOR', hasTitle: false, hasLetterO: true },
-  { id: 'S5', name: 'Comtesse Léa de Valois', gender: 'F', status: 'VISITOR', hasTitle: true, hasLetterO: true },
-  { id: 'S6', name: 'Julien Mercier', gender: 'M', status: 'EMPLOYEE', hasTitle: false, hasLetterO: false },
-  { id: 'S7', name: 'Camille Laurent', gender: 'F', status: 'VISITOR', hasTitle: false, hasLetterO: false },
-  { id: 'S8', name: 'Prof. Henri Beaumont', gender: 'M', status: 'EMPLOYEE', hasTitle: true, hasLetterO: true },
-  { id: 'S9', name: 'Inès Benali', gender: 'F', status: 'EMPLOYEE', hasTitle: false, hasLetterO: false },
-  { id: 'S10', name: 'Baron Maxence K.', gender: 'M', status: 'VISITOR', hasTitle: true, hasLetterO: false },
+  { id: 's1', name: 'Éléonore Vance', title: 'Conservatrice', role: 'Staff' },
+  { id: 's2', name: 'Arthur Pendelton', title: 'Mécène', role: 'Visitor' },
+  { id: 's3', name: 'Dr. Claire Sterling', title: 'Historienne', role: 'Expert' },
+  { id: 's4', name: 'Marcus Brody', title: 'Archiviste', role: 'Staff' },
+  { id: 's5', name: 'Helena Rostova', title: 'Restauratrice', role: 'Expert' },
 ];
 
 export const WEAPONS: Weapon[] = [
-  { id: 'W1', name: 'Dague cérémonielle', woundSignature: 'Incision nette à lame étroite' },
-  { id: 'W2', name: 'Statuette en bronze', woundSignature: 'Traumatisme crânien contondant' },
-  { id: 'W3', name: 'Cordon de velours', woundSignature: 'Sillon de strangulation fibreux' },
-  { id: 'W4', name: 'Scalpel de restauration', woundSignature: 'Coupure chirurgicale ultra-fine' },
-  { id: 'W5', name: 'Chandelier en argent', woundSignature: 'Impact lourd circulaire' },
-  { id: 'W6', name: 'Fiole de cyanure', woundSignature: 'Odeur d’amande amère' },
-  { id: 'W7', name: 'Pistolet à silex', woundSignature: 'Brûlures de poudre noire' },
-  { id: 'W8', name: 'Serre-livres en marbre', woundSignature: 'Fracture angulaire' },
-  { id: 'W9', name: 'Aiguille à tapisserie', woundSignature: 'Piqûre profonde' },
-  { id: 'W10', name: 'Marteau de commissaire-priseur', woundSignature: 'Contusion nette' },
+  { id: 'w1', name: 'Dague cérémonielle' },
+  { id: 'w2', name: 'Statuette en bronze' },
+  { id: 'w3', name: 'Flacon de venin' },
+  { id: 'w4', name: 'Lourd chandelier' },
+  { id: 'w5', name: 'Sabre d’apparat' },
+  { id: 'w6', name: 'Couteau de dissection' },
+  { id: 'w7', name: 'Livre empoisonné' },
+  { id: 'w8', name: 'Poids de balance' },
+  { id: 'w9', name: 'Corde de hissage' },
+  { id: 'w10', name: 'Presse-papier en onyx' },
 ];
 
-export const MOTIVES: Motive[] = [
-  {
-    id: 'M1_THEFT',
-    name: 'Le Vol',
-    stages: [
-      { stageNumber: 1, type: 'LIGHT_1', rawText: 'Poussière de fibre synthétique sur une vitrine.' },
-      { stageNumber: 2, type: 'LIGHT_2', rawText: 'Catalogue d’enchères annoté au crayon rouge.' },
-      { stageNumber: 3, type: 'NOTE_ORIENTATION', rawText: 'Note : "L’acheteur s’impatiente, la pièce doit sortir ce soir."' },
-      { stageNumber: 4, type: 'MATRIX_REVELATION', rawText: 'Bordereau : le suspect porte un titre officiel.', unlockColumn: 'TITLE' },
-      { stageNumber: 5, type: 'MOBILE_CONFIRMATION', rawText: 'Mobile officiel confirmé : Le Vol.' },
-      { stageNumber: 6, type: 'SILENT_ALARM', rawText: 'Alarme silencieuse : effraction dans l’aile du crime.' },
-    ],
-  },
-  {
-    id: 'M2_PASSION',
-    name: 'Crime Passionnel',
-    stages: [
-      { stageNumber: 1, type: 'LIGHT_1', rawText: 'Parfum rare imprégné sur un fauteuil.' },
-      { stageNumber: 2, type: 'LIGHT_2', rawText: 'Verre de cocktail contenant des traces de sédatif.' },
-      { stageNumber: 3, type: 'NOTE_ORIENTATION', rawText: 'Lettre déchirée : "...tu as choisi un autre."' },
-      { stageNumber: 4, type: 'MATRIX_REVELATION', rawText: 'Mouchoir brodé : le genre est déterminant.', unlockColumn: 'GENDER' },
-      { stageNumber: 5, type: 'MOBILE_CONFIRMATION', rawText: 'Mobile officiel confirmé : Crime Passionnel.' },
-      { stageNumber: 6, type: 'SILENT_ALARM', rawText: 'Alarme silencieuse : capteur de choc déclenché.' },
-    ],
-  },
-  {
-    id: 'M3_BLACKMAIL',
-    name: 'Le Chantage',
-    stages: [
-      { stageNumber: 1, type: 'LIGHT_1', rawText: 'Clé USB cryptée sous un socle.' },
-      { stageNumber: 2, type: 'LIGHT_2', rawText: 'Enveloppe kraft avec traces bancaires.' },
-      { stageNumber: 3, type: 'NOTE_ORIENTATION', rawText: 'Note : "Signez le transfert avant minuit."' },
-      { stageNumber: 4, type: 'MATRIX_REVELATION', rawText: 'Badge partiel : vérifiez le statut.', unlockColumn: 'STATUS' },
-      { stageNumber: 5, type: 'MOBILE_CONFIRMATION', rawText: 'Mobile officiel confirmé : Le Chantage.' },
-      { stageNumber: 6, type: 'SILENT_ALARM', rawText: 'Alarme silencieuse : ouverture forcée signalée.' },
-    ],
-  },
-  {
-    id: 'M4_REVENGE',
-    name: 'Vengeance Professionnelle',
-    stages: [
-      { stageNumber: 1, type: 'LIGHT_1', rawText: 'Badge d’accès forcé mécaniquement.' },
-      { stageNumber: 2, type: 'LIGHT_2', rawText: 'Résidus de solvant sur un rapport d’audit.' },
-      { stageNumber: 3, type: 'NOTE_ORIENTATION', rawText: 'Avis de rétrogradation : "Incompétence notoire."' },
-      { stageNumber: 4, type: 'MATRIX_REVELATION', rawText: 'Initiale gravée : surveillez la lettre O.', unlockColumn: 'LETTER_O' },
-      { stageNumber: 5, type: 'MOBILE_CONFIRMATION', rawText: 'Mobile officiel confirmé : Vengeance.' },
-      { stageNumber: 6, type: 'SILENT_ALARM', rawText: 'Alarme silencieuse : sabotage détecté.' },
-    ],
-  },
-];
-
+// ------------------------------------------
+// CLASSE DU MOTEUR DE JEU COMPLET
+// ------------------------------------------
 export class SuperCluedoEngine {
-  private session: UnifiedGameSession;
+  public session: GameSession;
 
-  constructor(sessionCode: string, initialPlayers: { id: string; name: string; roleId: RoleId }[]) {
-    this.session = this.createNewSession(sessionCode, initialPlayers);
+  constructor() {
+    this.session = this.initNewGame();
   }
 
-  public getSession(): UnifiedGameSession {
-    return structuredClone(this.session);
-  }
-
-  private createNewSession(
-    sessionId: string,
-    playerConfigs: { id: string; name: string; roleId: RoleId }[]
-  ): UnifiedGameSession {
-    const killer = this.pickRandom(SUSPECTS);
-    const weapon = this.pickRandom(WEAPONS);
-    const crimeRoomId = Math.floor(Math.random() * 10) + 1;
-    const motive = this.pickRandom(MOTIVES);
-    const crimeRoomConfig = MUSEUM_ROOMS.find((r) => r.id === crimeRoomId)!;
+  public initNewGame(): GameSession {
+    const murderer = SUSPECTS[Math.floor(Math.random() * SUSPECTS.length)];
+    const weapon = WEAPONS[Math.floor(Math.random() * WEAPONS.length)];
+    const targetRoomId = Math.floor(Math.random() * 10) + 1;
+    const motifs = ['M1_THEFT', 'M2_PASSION', 'M3_BLACKMAIL', 'M4_REVENGE'];
+    const motive = motifs[Math.floor(Math.random() * motifs.length)];
 
     const roomsState: Record<number, RoomState> = {};
     for (const r of MUSEUM_ROOMS) {
-      roomsState[r.id] = {
-        id: r.id,
-        isVisited: r.id === 0,
-        npcIds: [],
-        zones: { A: this.createEmptyZone(), B: this.createEmptyZone() },
+      roomsState[r.id] = { roomId: r.id, npcIds: [], searchedZones: [], clueIds: [] };
+    }
+
+    // Répartition exclusive des armes (1 par salle de 1 à 10)
+    WEAPONS.forEach((w, index) => {
+      const roomId = (index % 10) + 1;
+      roomsState[roomId].weaponId = w.id;
+    });
+
+    // Placement initial des PNJ (max 2 par pièce)
+    SUSPECTS.forEach((suspect, idx) => {
+      const targetRoom = (idx % 10) + 1;
+      if (roomsState[targetRoom].npcIds.length < 2) {
+        roomsState[targetRoom].npcIds.push(suspect.id);
+      } else {
+        roomsState[1].npcIds.push(suspect.id);
+      }
+    });
+
+    return {
+      turn: 1,
+      activePlayerId: 'player1',
+      phase: 'investigation',
+      secretSolution: {
+        murdererId: murderer.id,
+        weaponId: weapon.id,
+        roomId: targetRoomId,
+        motiveId: motive,
+      },
+      players: {
+        player1: { id: 'player1', name: 'Robin', role: 'profileuse', currentRoomId: 0, actionPoints: 2, maxActionPoints: 2 },
+        player2: { id: 'player2', name: 'Emma', role: 'veteran', currentRoomId: 0, actionPoints: 2, maxActionPoints: 2 },
+      },
+      roomsState,
+      npcMovements: {},
+      analyzedClues: [],
+      hqInbox: [],
+    };
+  }
+
+  /**
+   * Déplacement du joueur (coûte 1 PA)
+   */
+  public movePlayer(playerId: string, targetRoomId: number): boolean {
+    const player = this.session.players[playerId];
+    if (!player || player.actionPoints < 1) return false;
+
+    const currentRoom = MUSEUM_ROOMS.find((r) => r.id === player.currentRoomId);
+    if (!currentRoom || !currentRoom.adjacentRooms.includes(targetRoomId)) return false;
+
+    player.currentRoomId = targetRoomId;
+    player.actionPoints -= 1;
+    return true;
+  }
+
+  /**
+   * Fouille d'une zone (A ou B) dans la salle actuelle (coûte 1 PA)
+   */
+  public searchRoomZone(playerId: string, zone: 'A' | 'B'): { success: boolean; message: string; foundItem?: string } {
+    const player = this.session.players[playerId];
+    if (!player || player.actionPoints < 1) {
+      return { success: false, message: "Points d'action insuffisants." };
+    }
+
+    const roomState = this.session.roomsState[player.currentRoomId];
+    if (!roomState) return { success: false, message: "Salle invalide." };
+
+    if (roomState.searchedZones.includes(zone)) {
+      return { success: false, message: `La zone ${zone} de cette salle a déjà été fouillée.` };
+    }
+
+    roomState.searchedZones.push(zone);
+    player.actionPoints -= 1;
+
+    // Découverte potentielle (Arme unique de la salle ou Indice de motif)
+    if (zone === 'A' && roomState.weaponId) {
+      const weapon = WEAPONS.find((w) => w.id === roomState.weaponId);
+      return {
+        success: true,
+        message: `Fouille réussie ! Vous avez découvert l'arme : ${weapon?.name}. Vous pouvez l'envoyer au QG gratuitement.`,
+        foundItem: roomState.weaponId,
       };
     }
 
-    const shuffledSuspects = this.shuffle(SUSPECTS);
-    const initialRoomByNpc: Record<string, number> = {};
-    const slots = this.shuffle([1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10]).slice(0, 10);
-    shuffledSuspects.forEach((s, i) => (initialRoomByNpc[s.id] = slots[i]));
+    return {
+        success: true,
+        message: `Fouille de la zone ${zone} effectuée. Aucun objet majeur trouvé ici, mais l'indice est consigné.`,
+    };
+  }
 
-    const npcMovements: Record<string, NpcMovementRecord> = {};
-    shuffledSuspects.forEach((s) => {
-      const start = initialRoomByNpc[s.id];
-      roomsState[start].npcIds.push(s.id);
-      npcMovements[s.id] = { npcId: s.id, initialRoomId: start, finalRoomId: start, path: [start] };
-    });
+  /**
+   * Action gratuite (0 PA) : Envoyer une arme ou un indice au QG central
+   */
+  public sendItemToHQ(itemId: string): void {
+    if (!this.session.hqInbox.includes(itemId)) {
+      this.session.hqInbox.push(itemId);
+    }
+  }
 
-    const otherWeapons = this.shuffle(WEAPONS.filter((w) => w.id !== weapon.id));
-    const otherRooms = this.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((id) => id !== crimeRoomId));
-    const weaponByRoom: Record<number, Weapon> = { [crimeRoomId]: weapon };
-    otherRooms.forEach((rId, idx) => (weaponByRoom[rId] = otherWeapons[idx]));
+  /**
+   * Analyse d'une pièce à conviction (sur place pour le Technicien, ou centralisée)
+   */
+  public analyzeItem(itemId: string): boolean {
+    if (!this.session.analyzedClues.includes(itemId)) {
+      this.session.analyzedClues.push(itemId);
+      return true;
+    }
+    return false;
+  }
 
-    const clueRooms = new Set(this.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).slice(0, 6));
+  /**
+   * Interrogatoire d'un PNJ présent dans la même salle (coûte 1 PA ou gratuit selon variante, ici 1 PA)
+   */
+  public performInterrogation(playerId: string, npcId: string): { testimonial: string; isUseful: boolean } {
+    const player = this.session.players[playerId];
+    if (!player || player.actionPoints < 1) {
+      return { testimonial: "PA insuffisants pour interroger.", isUseful: false };
+    }
 
-    for (let rId = 1; rId <= 10; rId++) {
-      const wZone = Math.random() < 0.5 ? 'A' : 'B';
-      const cZone = wZone === 'A' ? 'B' : 'A';
-      roomsState[rId].zones[wZone].contentType = 'WEAPON';
-      roomsState[rId].zones[wZone].itemId = weaponByRoom[rId].id;
-      if (clueRooms.has(rId)) {
-        roomsState[rId].zones[cZone].contentType = 'MOTIVE_CLUE';
-        roomsState[rId].zones[cZone].itemId = motive.id;
-      } else {
-        roomsState[rId].zones[cZone].contentType = 'DECOY_CLUE';
-        roomsState[rId].zones[cZone].itemId = 'DECOY';
+    const roomState = this.session.roomsState[player.currentRoomId];
+    if (!roomState || !roomState.npcIds.includes(npcId)) {
+      return { testimonial: "Ce suspect n'est pas dans votre salle.", isUseful: false };
+    }
+
+    player.actionPoints -= 1;
+    const npcMovement = this.session.npcMovements[npcId];
+    const npcObject = SUSPECTS.find((s) => s.id === npcId)!;
+
+    const start = npcMovement ? npcMovement.initialRoomId : player.currentRoomId;
+    const end = npcMovement ? npcMovement.finalRoomId : player.currentRoomId;
+    const movementText = start === end 
+      ? `Je suis resté discret dans la zone ${start} ces derniers tours.` 
+      : `Je me suis déplacé de la salle ${start} pour rejoindre ici (${end}).`;
+
+    const hasElevatorSound = player.currentRoomId >= 6 && player.currentRoomId <= 10;
+    const soundText = hasElevatorSound 
+      ? " J'ai perçu les grincements sourds du monte-charge à travers les cloisons." 
+      : " L'ambiance était calme.";
+
+    return {
+      testimonial: `"${movementText}${soundText}"`,
+      isUseful: true,
+    };
+  }
+
+  /**
+   * Déplacement automatique des PNJ (0 à 2 pas, respect de max 2 PNJ/salle et anti-duo)
+   */
+  public moveAllNpcs(): void {
+    const previousRoomByNpc: Record<string, number> = {};
+    const roommatesBefore: Record<string, string[]> = {};
+
+    for (const r of MUSEUM_ROOMS) {
+      const npcsInRoom = this.session.roomsState[r.id].npcIds;
+      for (const npcId of npcsInRoom) {
+        previousRoomByNpc[npcId] = r.id;
+        roommatesBefore[npcId] = npcsInRoom.filter((id) => id !== npcId);
       }
     }
 
-    const players: Record<string, PlayerState> = {};
-    const turnOrder = playerConfigs.map((p) => p.id);
-    playerConfigs.forEach((p) => {
-      players[p.id] = { id: p.id, name: p.name, roleId: p.roleId, currentRoomId: 0, remainingAP: 2, rerollUsedThisTurn: false };
-    });
-
-    const playerNotes: Record<string, Record<MatrixColumn, TriState>> = {};
-    SUSPECTS.forEach((s) => {
-      playerNotes[s.id] = { GENDER: 'NSP', STATUS: 'NSP', TITLE: 'NSP', LETTER_O: 'NSP' };
-    });
-
-    return {
-      sessionId,
-      phase: 'INVESTIGATION',
-      turnNumber: 1,
-      turnOrder,
-      activePlayerId: turnOrder[0],
-      geekTimerEndTimestamp: Date.now() + 600_000,
-      secretSolution: {
-        killerId: killer.id,
-        weaponId: weapon.id,
-        crimeSceneRoomId: crimeRoomId,
-        motiveId: motive.id,
-        crimeWing: crimeRoomConfig.wing as 'WEST' | 'EAST',
-      },
-      players,
-      roomsState,
-      npcMovements,
-      nextMotiveStageToDistribute: 1,
-      notebook: {
-        visibleColumns: { GENDER: false, STATUS: false, TITLE: false, LETTER_O: false },
-        discoveredSuspectIds: [],
-        playerNotes,
-        eliminatedSuspectIds: [],
-        publicCluesLog: [],
-      },
-      pendingAction: null,
-      manhunt: {
-        isActive: false,
-        killerCurrentRoomId: 0,
-        roomsTraversedCount: 0,
-        maxRoomsAllowed: 6,
-        visitedHistory: [],
-        isHoldingPosition: false,
-        lastLog: '',
-      },
-    };
-  }
-
-  public submitPlayerAction(payload: Omit<PendingAction, 'id' | 'secretGmVerdict' | 'isCriticalAlert'>): void {
-    const player = this.session.players[payload.playerId];
-    if (!player || player.id !== this.session.activePlayerId) throw new Error('Ce n’est pas le tour de ce joueur.');
-    if (player.remainingAP <= 0) throw new Error('Plus de PA disponibles.');
-
-    const { verdict, isCritical } = this.computeSecretGmVerdict(payload);
-    this.session.pendingAction = {
-      ...payload,
-      id: `ACT_${Date.now()}`,
-      secretGmVerdict: verdict,
-      isCriticalAlert: isCritical,
-    };
-  }
-
-  private computeSecretGmVerdict(payload: Omit<PendingAction, 'id' | 'secretGmVerdict' | 'isCriticalAlert'>): { verdict: string; isCritical: boolean } {
-    const roll = payload.rawDiceRoll;
-    switch (payload.actionType) {
-      case 'MOVE':
-        return { verdict: `Déplacement vers la Salle ${payload.targetRoomId}.`, isCritical: false };
-      case 'SEARCH':
-        return { verdict: `Fouille effectuée en Zone ${payload.targetZone}. Dé : ${roll}`, isCritical: false };
-      case 'INTERROGATE':
-        return { verdict: `Interrogatoire de ${payload.targetNpcId}. Dé : ${roll}`, isCritical: false };
-      case 'ANALYZE':
-        return { verdict: `Analyse en labo. Dé : ${roll}`, isCritical: false };
-      case 'ACCUSE':
-        return { verdict: `Accusation officielle enregistrée.`, isCritical: true };
-      case 'ARREST':
-        return { verdict: `Tentative d'interpellation. Dé : ${roll}`, isCritical: true };
+    for (const r of MUSEUM_ROOMS) {
+      this.session.roomsState[r.id].npcIds = [];
     }
-  }
 
-  public approvePendingAction(): void {
-    const action = this.session.pendingAction;
-    if (!action) return;
+    const newRoomByNpc: Record<string, number> = {};
 
-    const player = this.session.players[action.playerId];
-    player.remainingAP = Math.max(0, player.remainingAP - 1);
+    for (const [npcId, oldRoom] of Object.entries(previousRoomByNpc)) {
+      const oldPartners = roommatesBefore[npcId] || [];
+      let chosenRoom = oldRoom;
+      let attempts = 0;
+      let validMove = false;
 
-    if (action.actionType === 'MOVE' && action.targetRoomId !== undefined) {
-      player.currentRoomId = action.targetRoomId;
-      const room = this.session.roomsState[action.targetRoomId];
-      room.isVisited = true;
-      for (const npcId of room.npcIds) {
-        if (!this.session.notebook.discoveredSuspectIds.includes(npcId)) {
-          this.session.notebook.discoveredSuspectIds.push(npcId);
+      while (!validMove && attempts < 15) {
+        attempts++;
+        const steps = Math.floor(Math.random() * 3); // 0, 1 ou 2 pas
+        let currentPathNode = oldRoom;
+
+        for (let s = 0; s < steps; s++) {
+          const roomConfig = MUSEUM_ROOMS.find((r) => r.id === currentPathNode)!;
+          const neighbors = roomConfig.adjacentRooms.filter((id) => id !== 0); // Évite le QG
+          if (neighbors.length > 0) {
+            currentPathNode = neighbors[Math.floor(Math.random() * neighbors.length)];
+          }
+        }
+
+        const candidateRoom = currentPathNode;
+        const npcsInCandidate = this.session.roomsState[candidateRoom]?.npcIds || [];
+
+        const sharesPartnerWithOld = oldPartners.some((partnerId) => newRoomByNpc[partnerId] === candidateRoom);
+        const wouldBeValid = npcsInCandidate.length < 2 && !sharesPartnerWithOld;
+
+        if (wouldBeValid) {
+          chosenRoom = candidateRoom;
+          validMove = true;
         }
       }
-    }
 
-    this.session.pendingAction = null;
-    if (player.remainingAP === 0) {
-      this.advanceTurn();
+      newRoomByNpc[npcId] = chosenRoom;
+      this.session.roomsState[chosenRoom].npcIds.push(npcId);
+
+      this.session.npcMovements[npcId] = {
+        npcId,
+        initialRoomId: oldRoom,
+        finalRoomId: chosenRoom,
+        path: [oldRoom, chosenRoom],
+      };
     }
   }
 
-  private advanceTurn(): void {
-    const currentIndex = this.session.turnOrder.indexOf(this.session.activePlayerId);
-    const nextIndex = (currentIndex + 1) % this.session.turnOrder.length;
-    if (nextIndex === 0) {
-      this.session.turnNumber++;
-      Object.values(this.session.players).forEach((p) => {
-        p.remainingAP = 2;
-      });
+  /**
+   * Fin de tour : recharge les PA et déplace les PNJ
+   */
+  public nextTurn(): void {
+    this.session.turn += 1;
+    for (const pId of Object.keys(this.session.players)) {
+      this.session.players[pId].actionPoints = this.session.players[pId].maxActionPoints;
     }
-    this.session.activePlayerId = this.session.turnOrder[nextIndex];
-  }
-
-  private createEmptyZone(): ZoneState {
-    return {
-      contentType: 'EMPTY',
-      itemId: null,
-      isSearched: false,
-      cumulativeSearchScore: 0,
-      isAnalyzed: false,
-      isDestroyed: false,
-    };
-  }
-
-  private pickRandom<T>(arr: T[]): T {
-    return arr[Math.floor(Math.random() * arr.length)];
-  }
-
-  private shuffle<T>(arr: T[]): T[] {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
+    this.moveAllNpcs();
   }
 }
