@@ -1,521 +1,340 @@
 import React, { useState } from 'react';
-import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, MatrixColumn, TriState, RoleId } from './gameEngine';
-
-// Coordonnées géométriques exactes du Prisme Pentagonal (QG au centre + anneau intérieur 1-5 + anneau extérieur 6-10)
-const ROOM_COORDS: Record<number, { x: number; y: number; ring: 'QG' | 'INNER' | 'OUTER' }> = {
-  0:  { x: 200, y: 190, ring: 'QG' },
-  1:  { x: 200, y: 118, ring: 'INNER' },
-  2:  { x: 268, y: 168, ring: 'INNER' },
-  3:  { x: 242, y: 248, ring: 'INNER' },
-  4:  { x: 158, y: 248, ring: 'INNER' },
-  5:  { x: 132, y: 168, ring: 'INNER' },
-  6:  { x: 200, y: 42,  ring: 'OUTER' },
-  7:  { x: 341, y: 144, ring: 'OUTER' },
-  8:  { x: 287, y: 310, ring: 'OUTER' },
-  9:  { x: 113, y: 310, ring: 'OUTER' },
-  10: { x: 59,  y: 144, ring: 'OUTER' },
-};
-
-const PRISM_EDGES: [number, number][] = [
-  [1, 2], [2, 3], [3, 4], [4, 5], [5, 1],
-  [6, 7], [7, 8], [8, 9], [9, 10], [10, 6],
-  [1, 6], [2, 7], [3, 8], [4, 9], [5, 10],
-];
+import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS } from './gameEngine';
 
 export default function App() {
-  const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
-  const [session, setSession] = useState<any>(null);
+  const [engine] = useState(() => new SuperCluedoEngine());
+  const [gameState, setGameState] = useState(() => engine.session);
+  const [activeTab, setActiveTab] = useState<'board' | 'hq' | 'notes'>('board');
+  const [accusationModal, setAccusationModal] = useState(false);
+  const [selectedSuspect, setSelectedSuspect] = useState(SUSPECTS[0].id);
+  const [selectedWeapon, setSelectedWeapon] = useState(WEAPONS[0].id);
+  const [selectedRoom, setSelectedRoom] = useState(1);
+  const [interrogateFeedback, setInterrogateFeedback] = useState<string | null>(null);
 
-  const [participantNames, setParticipantNames] = useState<string[]>(['Robin', 'Emma', 'Arbitre']);
-  const [participantRoles, setParticipantRoles] = useState<string[]>(['PROFILER', 'VETERAN', 'GM']);
-
-  const [appMode, setAppMode] = useState<'SETUP' | 'PLAYER_TERMINAL' | 'GM_CONSOLE'>('SETUP');
-  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'NOTEBOOK' | 'MAP'>('PLAYER');
-  
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
-  const [actionType, setActionType] = useState<'MOVE' | 'SEARCH' | 'INTERROGATE' | 'ANALYZE' | 'ACCUSE' | 'ARREST'>('MOVE');
-  const [targetRoom, setTargetRoom] = useState(1);
-  const [targetZone, setTargetZone] = useState<'A' | 'B'>('A');
-  const [targetNpc, setTargetNpc] = useState(SUSPECTS[0].id);
-  const [diceRoll, setDiceRoll] = useState<number>(3);
-
-  const handleStartGame = (e: React.FormEvent) => {
-    e.preventDefault();
-    const playersConfig = participantNames
-      .map((name, index) => ({
-        name: name.trim() || `Participant ${index + 1}`,
-        role: participantRoles[index],
-        index,
-      }))
-      .filter((p) => p.role !== 'GM');
-
-    if (playersConfig.length === 0) {
-      alert("Il faut au moins un détective pour lancer la partie !");
-      return;
-    }
-
-    const formattedPlayers = playersConfig.map((p, i) => ({
-      id: `p${i + 1}`,
-      name: p.name,
-      roleId: p.role as RoleId,
-    }));
-
-    const newEngine = new SuperCluedoEngine('MUSE_V2', formattedPlayers);
-    setEngine(newEngine);
-    const newSession = newEngine.getSession();
-    setSession(newSession);
-    setSelectedPlayerId(newSession.turnOrder[0]);
-    setAppMode('PLAYER_TERMINAL');
+  const refreshState = () => {
+    setGameState({ ...engine.session });
   };
 
-  const refreshSession = () => {
-    if (engine) setSession(engine.getSession());
-  };
+  const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
+  const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
+  const roomConfig = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
 
-  const handlePlayerSubmit = () => {
-    if (!engine) return;
-    try {
-      engine.submitPlayerAction({
-        playerId: selectedPlayerId,
-        playerName: session.players[selectedPlayerId].name,
-        roleId: session.players[selectedPlayerId].roleId,
-        actionType,
-        targetRoomId: actionType === 'MOVE' ? targetRoom : undefined,
-        targetZone: actionType === 'SEARCH' ? targetZone : undefined,
-        targetNpcId: actionType === 'INTERROGATE' ? targetNpc : undefined,
-        rawDiceRoll: diceRoll,
-      });
-      refreshSession();
-    } catch (e: any) {
-      alert(e.message);
-    }
-  };
-
-  const handleGmApprove = () => {
-    if (!engine) return;
-    engine.approvePendingAction();
-    refreshSession();
-  };
-
-  const handleCycleCell = (suspectId: string, column: MatrixColumn) => {
-    if (!engine) return;
-    if (!session.notebook.visibleColumns[column]) return;
-    const currentVal = session.notebook.playerNotes[suspectId][column];
-    const nextVal: TriState = currentVal === 'NSP' ? 'YES' : currentVal === 'YES' ? 'NO' : 'NSP';
-    engine.updateNotebookNote(suspectId, column, nextVal);
-    refreshSession();
-  };
-
-  const activePlayer = session?.players[selectedPlayerId];
-  const availableRooms = activePlayer?.currentRoomId === 0 
-    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 5) 
-    : MUSEUM_ROOMS;
-
-  // Calcul des compteurs d'enquête pour la console MJ
-  const discoveredSuspectsCount = session?.notebook?.discoveredSuspectIds?.length || 0;
-  const totalSuspects = SUSPECTS.length;
-  
-  // Compter les armes et indices trouvés dans les salles
-  let foundWeapons = 0;
-  let foundClues = 0;
-  if (session?.roomsState) {
-    Object.values(session.roomsState).forEach((room: any) => {
-      ['A', 'B'].forEach((zoneKey) => {
-        const zone = room.zones[zoneKey];
-        if (zone.isSearched) {
-          if (zone.contentType === 'WEAPON') foundWeapons++;
-          if (zone.contentType === 'MOTIVE_CLUE') foundClues++;
-        }
-      });
-    });
-  }
-
-  if (appMode === 'SETUP' || !session || !engine) {
-    return (
-      <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-6 flex flex-col justify-center items-center font-sans">
-        <div className="max-w-md w-full bg-[#111827] border border-slate-800 rounded-3xl p-8 shadow-2xl">
-          <div className="text-center mb-6">
-            <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[11px] px-3 py-1 rounded-full font-bold uppercase tracking-wider">
-              Édition Musée v2
-            </span>
-            <h1 className="text-2xl font-black text-white mt-3">SUPER CLUEDO</h1>
-            <p className="text-xs text-slate-400 mt-1">Configuration des rôles et des participants</p>
-          </div>
-
-          <form onSubmit={handleStartGame} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-300 font-bold mb-2 uppercase tracking-wider text-[10px]">Nombre de participants :</label>
-              <div className="grid grid-cols-4 gap-2">
-                {[2, 3, 4, 5].map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    onClick={() => {
-                      setParticipantNames(Array.from({ length: count }, (_, i) => participantNames[i] || `Participant ${i + 1}`));
-                      setParticipantRoles(Array.from({ length: count }, (_, i) => participantRoles[i] || (i === count - 1 ? 'GM' : 'PROFILER')));
-                    }}
-                    className={`py-2 rounded-xl font-bold border transition ${
-                      participantNames.length === count ? 'bg-indigo-600 text-white border-indigo-500 shadow-md' : 'bg-[#0b0f17] text-slate-400 border-slate-800'
-                    }`}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {participantNames.map((name, index) => (
-                <div key={index} className="bg-[#0b0f17] p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                  <span className="font-bold text-amber-400 text-[11px]">Participant n°{index + 1}</span>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => {
-                      const updated = [...participantNames];
-                      updated[index] = e.target.value;
-                      setParticipantNames(updated);
-                    }}
-                    placeholder={`Nom du participant ${index + 1}`}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl p-2.5 text-slate-200 text-xs focus:border-indigo-500 focus:outline-none"
-                    required
-                  />
-                  <select
-                    value={participantRoles[index]}
-                    onChange={(e) => {
-                      const updated = [...participantRoles];
-                      updated[index] = e.target.value;
-                      setParticipantRoles(updated);
-                    }}
-                    className="w-full bg-[#111827] border border-slate-700 rounded-xl p-2.5 text-slate-300 text-xs focus:border-indigo-500 focus:outline-none"
-                  >
-                    <option value="PROFILER">🧠 Profileuse (Détective)</option>
-                    <option value="VETERAN">⭐ Vétéran (Détective)</option>
-                    <option value="FORENSIC">🔬 Technicien Forensic (Détective)</option>
-                    <option value="NEGOTIATOR">🤝 Négociateur (Détective)</option>
-                    <option value="GM">💻 Maître du Jeu (Arbitre exclusif)</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl transition shadow-lg text-xs uppercase tracking-wider mt-2"
-            >
-              Lancer l'Enquête 🚀
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // --- CONSOLE D'ARBITRAGE MJ (AVEC COMPTEURS ET PLAN TACTIQUE) ---
-  if (appMode === 'GM_CONSOLE') {
-    return (
-      <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto space-y-4">
-        <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl shadow-xl flex justify-between items-center">
-          <div>
-            <h1 className="text-base font-black text-indigo-400">Console d'Arbitrage MJ</h1>
-            <p className="text-[11px] text-slate-400">Suivi global de l'enquête & validation</p>
-          </div>
-          <button 
-            onClick={() => setAppMode('PLAYER_TERMINAL')}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs border border-slate-700"
-          >
-            ← Retour Terminal
-          </button>
-        </header>
-
-        {/* Compteurs de suivi MJ */}
-        <div className="grid grid-cols-3 gap-2.5 text-xs">
-          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
-            <span className="text-[10px] text-slate-400 uppercase font-bold block">Personnages</span>
-            <span className="text-lg font-black text-amber-400">{discoveredSuspectsCount} / {totalSuspects}</span>
-            <span className="text-[9px] text-slate-500 block">découverts</span>
-          </div>
-          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
-            <span className="text-[10px] text-slate-400 uppercase font-bold block">Armes</span>
-            <span className="text-lg font-black text-emerald-400">{foundWeapons} / 10</span>
-            <span className="text-[9px] text-slate-500 block">trouvées</span>
-          </div>
-          <div className="bg-[#111827] border border-slate-800 p-3 rounded-xl text-center shadow">
-            <span className="text-[10px] text-slate-400 uppercase font-bold block">Indices Motifs</span>
-            <span className="text-lg font-black text-indigo-400">{foundClues} / 6</span>
-            <span className="text-[9px] text-slate-500 block">analysés</span>
-          </div>
-        </div>
-
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
-          <div className="bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-900/50">
-            <p className="font-bold text-indigo-300 uppercase text-[10px]">🔒 Solution Secrète (Confidentiel MJ) :</p>
-            <p className="text-slate-300 mt-1">
-              Meurtrier : <span className="text-amber-400 font-bold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span><br />
-              Arme : <span className="text-amber-400 font-bold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span><br />
-              Salle du Crime : <span className="text-amber-400 font-bold">Salle {session.secretSolution.crimeSceneRoomId}</span>
-            </p>
-          </div>
-
-          <div className="bg-[#0b0f17] p-3.5 rounded-xl border border-slate-800">
-            <p className="font-bold text-slate-300 mb-2 text-[10px] uppercase">Action soumise par un joueur :</p>
-            {session.pendingAction ? (
-              <div className="space-y-3">
-                <div className="bg-[#111827] p-3 rounded-xl border border-slate-800 space-y-1">
-                  <p className="text-amber-400 font-bold">{session.pendingAction.playerName} ({session.pendingAction.actionType})</p>
-                  <p className="text-slate-300 text-[11px] font-mono">{session.pendingAction.secretGmVerdict}</p>
-                </div>
-                <button onClick={handleGmApprove} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow">
-                  Valider & Appliquer sur le Plateau 🛡️
-                </button>
-              </div>
-            ) : (
-              <p className="text-slate-500 italic text-center py-6">Aucune action en attente de validation...</p>
-            )}
-          </div>
-        </div>
-
-        {/* Le MJ a également accès au plan tactique global */}
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3 text-xs">
-          <h2 className="text-sm font-black text-white">🗺️ Vue Globale du Plateau (Contrôle MJ)</h2>
-          <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center relative">
-            <svg viewBox="0 0 400 350" className="w-full max-w-sm h-auto">
-              {[1, 2, 3, 4, 5].map((id) => (
-                <line key={`qg-gm-${id}`} x1={ROOM_COORDS[0].x} y1={ROOM_COORDS[0].y} x2={ROOM_COORDS[id].x} y2={ROOM_COORDS[id].y} stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.45" />
-              ))}
-              {PRISM_EDGES.map(([from, to], idx) => (
-                <line key={`edge-gm-${idx}`} x1={ROOM_COORDS[from].x} y1={ROOM_COORDS[from].y} x2={ROOM_COORDS[to].x} y2={ROOM_COORDS[to].y} stroke="#475569" strokeWidth="1.6" />
-              ))}
-              {Object.entries(ROOM_COORDS).map(([idStr, pos]) => {
-                const roomId = Number(idStr);
-                const detectivesInRoom = Object.values(session.players).filter((p: any) => p.currentRoomId === roomId);
-                const isQg = roomId === 0;
-                return (
-                  <g key={roomId} transform={`translate(${pos.x}, ${pos.y})`}>
-                    <circle r={isQg ? 24 : 18} fill={detectivesInRoom.length > 0 ? '#312e81' : '#111827'} stroke={detectivesInRoom.length > 0 ? '#818cf8' : '#475569'} strokeWidth="1.5" />
-                    <text y="3" textAnchor="middle" fill="#f8fafc" fontSize="9" fontWeight="bold">{isQg ? 'QG' : `S.${roomId}`}</text>
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Compteurs globaux MJ
+  const totalDiscoveredNpcs = Object.values(gameState.roomsState).reduce((acc, room) => acc + room.npcIds.length, 0);
+  const totalWeaponsFound = Object.values(gameState.roomsState).filter(room => room.weaponId && room.searchedZones.includes('A')).length;
 
   return (
-    <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
-      <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl mb-4 shadow-xl">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <h1 className="text-base font-black text-white">Super Cluedo v2</h1>
-            <p className="text-[11px] text-slate-400">Tour n°{session.turnNumber} | Phase : {session.phase}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select 
-              value={selectedPlayerId} 
-              onChange={(e) => setSelectedPlayerId(e.target.value)}
-              className="bg-[#0b0f17] text-xs text-slate-200 border border-slate-700 rounded-xl px-3 py-2 font-bold focus:outline-none"
-            >
-              {Object.values(session.players).map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.roleId})</option>
-              ))}
-            </select>
-            <button 
-              onClick={() => setAppMode('GM_CONSOLE')}
-              className="bg-indigo-950 text-indigo-300 border border-indigo-800 px-2.5 py-2 rounded-xl text-[10px] font-bold"
-              title="Accès Maître du Jeu"
-            >
-              💻 MJ
-            </button>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans">
+      
+      {/* EN-TÊTE PRINCIPAL */}
+      <header className="max-w-7xl mx-auto mb-6 border-b border-slate-800 pb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-wider text-amber-400">SUPER CLUEDO — ÉDITION MUSÉE</h1>
+          <p className="text-sm text-slate-400">
+            Tour n°{gameState.turn} | Phase : <span className="text-emerald-400 uppercase font-semibold">{gameState.phase}</span>
+          </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-xs font-bold">
-          <button 
-            onClick={() => setCurrentViewMode('PLAYER')}
-            className={`py-2 rounded-xl transition border ${currentViewMode === 'PLAYER' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
-          >
-            Action
-          </button>
-          <button 
-            onClick={() => setCurrentViewMode('NOTEBOOK')}
-            className={`py-2 rounded-xl transition border ${currentViewMode === 'NOTEBOOK' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
-          >
-            Carnet
-          </button>
-          <button 
-            onClick={() => setCurrentViewMode('MAP')}
-            className={`py-2 rounded-xl transition border ${currentViewMode === 'MAP' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
-          >
-            🗺️ Carte
-          </button>
+        {/* Tableau de bord / Compteurs du MJ */}
+        <div className="flex flex-wrap gap-3 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl text-xs">
+          <div>👤 PNJ repérés : <span className="text-amber-300 font-bold">{totalDiscoveredNpcs} / 5</span></div>
+          <div>🗡️ Armes trouvées : <span className="text-amber-300 font-bold">{totalWeaponsFound} / 10</span></div>
+          <div>📦 Boîte QG : <span className="text-amber-300 font-bold">{gameState.hqInbox.length}</span></div>
+          <div>🔬 Analysés : <span className="text-emerald-400 font-bold">{gameState.analyzedClues.length}</span></div>
+        </div>
+
+        {/* Contrôle du Joueur Actif & PA */}
+        <div className="bg-slate-900 border border-slate-700 px-4 py-2 rounded-xl text-sm flex items-center gap-3">
+          <div>
+            <span className="text-amber-300 font-semibold">{activePlayer.name}</span> 
+            <span className="text-xs text-slate-400 ml-1">({activePlayer.role})</span>
+          </div>
+          <div className="border-l border-slate-700 pl-3">
+            PA : <span className="text-emerald-400 font-bold">{activePlayer.actionPoints} / {activePlayer.maxActionPoints}</span>
+          </div>
         </div>
       </header>
 
-      {currentViewMode === 'PLAYER' && (
-        <div className="space-y-4">
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <span className="text-[10px] text-slate-400 uppercase font-bold">Détective Actif</span>
-                <h2 className="text-lg font-black text-white">{activePlayer.name}</h2>
+      {/* NAVIGATION INTERNE */}
+      <nav className="max-w-7xl mx-auto mb-6 flex gap-2 border-b border-slate-800 pb-3">
+        <button 
+          onClick={() => setActiveTab('board')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'board' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}
+        >
+          🗺️ Plan Tactique & Actions
+        </button>
+        <button 
+          onClick={() => setActiveTab('hq')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'hq' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}
+        >
+          🏢 QG Central & Analyses ({gameState.hqInbox.length})
+        </button>
+        <button 
+          onClick={() => setActiveTab('notes')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${activeTab === 'notes' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'}`}
+        >
+          📜 Journal de Bord MJ
+        </button>
+      </nav>
+
+      <main className="max-w-7xl mx-auto">
+        
+        {/* ONGLET 1 : PLAN TACTIQUE & ACTIONS */}
+        {activeTab === 'board' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Grille du Prisme Pentagonal */}
+            <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 rounded-xl p-6">
+              <h2 className="text-lg font-semibold mb-4 text-slate-200">Prisme Pentagonal (QG & Salles 1-10)</h2>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {MUSEUM_ROOMS.map((room) => {
+                  const isPlayerHere = activePlayer.currentRoomId === room.id;
+                  const roomState = gameState.roomsState[room.id];
+                  const isHQ = room.id === 0;
+
+                  return (
+                    <div 
+                      key={room.id}
+                      onClick={() => {
+                        if (isHQ || activePlayer.currentRoomId === 0 || roomConfig?.adjacentRooms.includes(room.id)) {
+                          engine.movePlayer(activePlayer.id, room.id);
+                          refreshState();
+                        }
+                      }}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        isPlayerHere 
+                          ? 'border-amber-400 bg-amber-950/30 shadow-lg shadow-amber-500/10' 
+                          : 'border-slate-800 bg-slate-900 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-xs font-mono text-slate-500">#{room.id}</span>
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                          {room.ring.toUpperCase()}
+                        </span>
+                      </div>
+                      <h3 className="font-medium text-sm text-slate-100 mb-1">{room.name}</h3>
+                      <p className="text-[11px] text-slate-400 mb-2 line-clamp-1">{room.description}</p>
+                      
+                      {roomState?.npcIds && roomState.npcIds.length > 0 && (
+                        <div className="mt-2 text-xs text-rose-400 flex flex-wrap gap-1">
+                          {roomState.npcIds.map(npcId => {
+                            const s = SUSPECTS.find(item => item.id === npcId);
+                            return <span key={npcId} className="bg-rose-950/50 px-1.5 py-0.5 rounded border border-rose-900">👤 {s?.name}</span>;
+                          })}
+                        </div>
+                      )}
+
+                      {roomState?.searchedZones.length > 0 && (
+                        <div className="mt-2 text-[10px] text-slate-400">
+                          Zones fouillées : {roomState.searchedZones.join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <span className="bg-indigo-950 text-indigo-300 border border-indigo-800 px-3 py-1 rounded-xl font-bold text-xs">
-                {activePlayer.remainingAP} / 2 PA
-              </span>
             </div>
-            <p className="text-xs text-slate-400">Rôle : <span className="text-slate-200 font-semibold">{activePlayer.roleId}</span></p>
-          </div>
 
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl">
-            <span className="text-[10px] text-slate-400 uppercase font-bold">Position actuelle</span>
-            <div className="flex justify-between items-center mt-1">
-              <h3 className="font-bold text-white text-sm">
-                {activePlayer.currentRoomId === 0 ? '🔒 QG Central (Départ)' : `Salle ${activePlayer.currentRoomId} · ${MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId)?.name}`}
-              </h3>
-              <span className="text-xs text-slate-400">Tour {session.turnNumber}</span>
+            {/* Panneau d'Actions du Joueur */}
+            <div className="space-y-6">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                <h2 className="text-md font-semibold mb-3 text-slate-200">
+                  Actions : <span className="text-amber-400">{roomConfig?.name}</span>
+                </h2>
+                
+                <div className="space-y-3">
+                  <button 
+                    onClick={() => {
+                      const res = engine.searchRoomZone(activePlayer.id, 'A');
+                      if (res.success && res.foundItem) {
+                        engine.sendItemToHQ(res.foundItem); // Envoi gratuit 0 PA
+                      }
+                      refreshState();
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-sm font-medium py-2 px-3 rounded-lg border border-slate-700 transition flex justify-between items-center"
+                  >
+                    <span>🔍 Fouiller Zone A</span>
+                    <span className="text-xs text-amber-400">1 PA</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      engine.searchRoomZone(activePlayer.id, 'B');
+                      refreshState();
+                    }}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-sm font-medium py-2 px-3 rounded-lg border border-slate-700 transition flex justify-between items-center"
+                  >
+                    <span>🔍 Fouiller Zone B</span>
+                    <span className="text-xs text-amber-400">1 PA</span>
+                  </button>
+
+                  {/* Rôle Technicien : Analyse sur place */}
+                  {activePlayer.role === 'technicien' && currentRoomState?.weaponId && (
+                    <button 
+                      onClick={() => {
+                        engine.analyzeItem(currentRoomState.weaponId!);
+                        refreshState();
+                      }}
+                      className="w-full bg-indigo-900/60 hover:bg-indigo-900 text-sm font-medium py-2 px-3 rounded-lg border border-indigo-700 transition text-left"
+                    >
+                      🔬 Analyser l'arme sur place (Technicien)
+                    </button>
+                  )}
+
+                  {/* Interrogatoires */}
+                  {currentRoomState?.npcIds.length > 0 && (
+                    <div className="pt-3 border-t border-slate-800">
+                      <p className="text-xs text-slate-400 mb-2 font-semibold uppercase">Suspects présents :</p>
+                      <div className="space-y-2">
+                        {currentRoomState.npcIds.map(npcId => {
+                          const npc = SUSPECTS.find(s => s.id === npcId);
+                          return (
+                            <button
+                              key={npcId}
+                              onClick={() => {
+                                const res = engine.performInterrogation(activePlayer.id, npcId);
+                                setInterrogateFeedback(`${npc?.name} : ${res.testimonial}`);
+                                refreshState();
+                              }}
+                              className="w-full bg-rose-950/40 hover:bg-rose-950/70 border border-rose-900/60 text-xs py-2 px-3 rounded-lg text-rose-200 transition text-left flex justify-between items-center"
+                            >
+                              <span>💬 Interroger {npc?.name}</span>
+                              <span className="text-[10px] text-rose-400">1 PA</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {interrogateFeedback && (
+                    <div className="bg-rose-950/20 border border-rose-900 p-3 rounded-lg text-xs text-rose-300 italic">
+                      {interrogateFeedback}
+                    </div>
+                  )}
+
+                  <button 
+                    onClick={() => {
+                      engine.nextTurn();
+                      setInterrogateFeedback(null);
+                      refreshState();
+                    }}
+                    className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold py-2.5 px-3 rounded-lg transition text-white shadow-lg shadow-emerald-900/20"
+                  >
+                    ▶️ Terminer le Tour / Déplacer les PNJ
+                  </button>
+
+                  <button 
+                    onClick={() => setAccusationModal(true)}
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-sm font-semibold py-2.5 px-3 rounded-lg transition text-slate-950 shadow-lg"
+                  >
+                    ⚖️ Formuler une Accusation
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ONGLET 2 : QG CENTRAL & ANALYSES */}
+        {activeTab === 'hq' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-2xl mx-auto">
+            <h2 className="text-lg font-semibold mb-4 text-amber-400">Boîte de Réception du QG Central</h2>
+            <p className="text-xs text-slate-400 mb-6">Les objets et indices envoyés gratuitement (0 PA) depuis le terrain arrivent ici pour analyse centralisée.</p>
+
+            <div className="space-y-3">
+              {gameState.hqInbox.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">Aucun objet transmis au QG pour l'instant.</p>
+              ) : (
+                gameState.hqInbox.map(itemId => {
+                  const weapon = WEAPONS.find(w => w.id === itemId);
+                  const isAnalyzed = gameState.analyzedClues.includes(itemId);
+                  return (
+                    <div key={itemId} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                      <div>
+                        <span className="text-sm font-medium text-slate-200">🗡️ {weapon?.name || itemId}</span>
+                        <span className={`ml-3 text-xs px-2 py-0.5 rounded ${isAnalyzed ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-amber-950 text-amber-400 border border-amber-900'}`}>
+                          {isAnalyzed ? 'Analysé' : 'En attente'}
+                        </span>
+                      </div>
+                      {!isAnalyzed && (
+                        <button 
+                          onClick={() => {
+                            engine.analyzeItem(itemId);
+                            refreshState();
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-xs px-3 py-1.5 rounded text-white font-medium transition"
+                        >
+                          Lancer l'analyse
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
+        )}
 
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-            <span className="text-[10px] text-slate-400 uppercase font-bold">Actions du Tour (1 PA)</span>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'MOVE', label: 'Déplacement' },
-                { id: 'SEARCH', label: 'Fouille (1 PA)' },
-                { id: 'INTERROGATE', label: 'Interro (2 PA)' },
-                { id: 'ANALYZE', label: 'Analyse (1 PA)' },
-              ].map((act) => (
-                <button
-                  key={act.id}
-                  onClick={() => setActionType(act.id as any)}
-                  className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition ${actionType === act.id ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-300 border-slate-800'}`}
-                >
-                  {act.label}
-                </button>
+        {/* ONGLET 3 : JOURNAL DE BORD DU MJ */}
+        {activeTab === 'notes' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-3xl mx-auto">
+            <h2 className="text-lg font-semibold mb-4 text-amber-400">Journal d'Investigation du Maître du Jeu</h2>
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs space-y-2 max-h-[400px] overflow-y-auto">
+              {gameState.gameLogs.map((log, index) => (
+                <div key={index} className="text-slate-300 border-b border-slate-900 pb-1">
+                  {log}
+                </div>
               ))}
             </div>
+          </div>
+        )}
 
-            {actionType === 'MOVE' && (
-              <div className="pt-2">
-                <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1">
-                  {activePlayer.currentRoomId === 0 ? 'Salle cible (Pentagone intérieur depuis le QG) :' : 'Salle cible adjacente :'}
-                </label>
-                <select 
-                  value={targetRoom} 
-                  onChange={(e) => setTargetRoom(Number(e.target.value))}
-                  className="w-full bg-[#0b0f17] border border-slate-700 rounded-xl p-3 text-slate-200 text-xs focus:outline-none"
-                >
-                  {availableRooms.map((r) => (
-                    <option key={r.id} value={r.id}>Salle {r.id} - {r.name}</option>
-                  ))}
+      </main>
+
+      {/* MODALE D'ACCUSATION */}
+      {accusationModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex justify-center items-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h2 className="text-lg font-bold text-amber-400">Formuler l'Accusation Finale</h2>
+            <p className="text-xs text-slate-400">Si vous désignez le coupable, l'arme et le lieu exacts, le suspect entrera en mode traque !</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">Suspect :</label>
+                <select value={selectedSuspect} onChange={(e) => setSelectedSuspect(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-slate-100">
+                  {SUSPECTS.map(s => <option key={s.id} value={s.id}>{s.name} ({s.title})</option>)}
                 </select>
               </div>
-            )}
-          </div>
 
-          <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-            <span className="text-[10px] text-slate-400 uppercase font-bold">Lancer de dé physique (1–6)</span>
-            <div className="flex space-x-1.5">
-              {[1, 2, 3, 4, 5, 6].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => setDiceRoll(num)}
-                  className={`flex-1 py-3 rounded-xl font-black text-xs border transition ${diceRoll === num ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] border-slate-800 text-slate-400'}`}
-                >
-                  {num}
-                </button>
-              ))}
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">Arme du crime :</label>
+                <select value={selectedWeapon} onChange={(e) => setSelectedWeapon(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-slate-100">
+                  {WEAPONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-300 block mb-1">Lieu du crime (Salle #) :</label>
+                <input type="number" min="1" max="10" value={selectedRoom} onChange={(e) => setSelectedRoom(parseInt(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-slate-100" />
+              </div>
             </div>
 
-            {session.pendingAction ? (
-              <div className="bg-amber-950/40 border border-amber-800/50 p-3 rounded-xl text-center text-amber-300 text-xs">
-                ⏳ Action transmise ! En attente de validation par le Maître du Jeu...
-              </div>
-            ) : (
-              <button 
-                onClick={handlePlayerSubmit}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl transition shadow text-xs uppercase tracking-wider mt-1"
-              >
-                Soumettre l'action au MJ ⚡
-              </button>
-            )}
+            <div className="flex gap-3 pt-3">
+              <button onClick={() => setAccusationModal(false)} className="flex-1 bg-slate-800 hover:bg-slate-700 py-2 rounded-lg text-sm transition">Annuler</button>
+              <button onClick={() => {
+                engine.submitAccusation(selectedSuspect, selectedWeapon, selectedRoom);
+                setAccusationModal(false);
+                refreshState();
+              }} className="flex-1 bg-amber-600 hover:bg-amber-500 py-2 rounded-lg text-sm text-slate-950 font-semibold transition">Valider l'Accusation</button>
+            </div>
           </div>
         </div>
       )}
 
-      {currentViewMode === 'NOTEBOOK' && (
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
-          <h2 className="text-sm font-black text-white">Carnet d'Enquête Mutualisé</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase">
-                  <th className="p-2.5">Élément</th>
-                  <th className="p-2.5">Catégorie</th>
-                  <th className="p-2.5 text-center">Notes</th>
-                  <th className="p-2.5 text-center">Statut</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SUSPECTS.slice(0, 5).map((s) => (
-                  <tr key={s.id} className="border-b border-slate-800/60">
-                    <td className="p-2.5 font-bold text-slate-200">{s.name}</td>
-                    <td className="p-2.5 text-slate-400">Suspect</td>
-                    <td className="p-2.5 text-center">
-                      <button 
-                        onClick={() => handleCycleCell(s.id, 'GENDER')}
-                        className="w-7 h-7 rounded-lg bg-[#0b0f17] text-slate-300 font-bold text-xs border border-slate-800"
-                      >
-                        ?
-                      </button>
-                    </td>
-                    <td className="p-2.5 text-center">
-                      <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">Innocent</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {currentViewMode === 'MAP' && (
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-black text-white">🗺️ Plan Tactique du Musée (Prisme Pentagonal)</h2>
-            <span className="text-[10px] text-slate-400">Tour {session.turnNumber}</span>
-          </div>
-          <p className="text-[11px] text-slate-400">QG au centre, 5 salles intérieures (1–5) et 5 salles extérieures (6–10) reliées par 3 accès chacune.</p>
-
-          <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden">
-            <svg viewBox="0 0 400 350" className="w-full max-w-sm h-auto">
-              {[1, 2, 3, 4, 5].map((id) => (
-                <line key={`qg-${id}`} x1={ROOM_COORDS[0].x} y1={ROOM_COORDS[0].y} x2={ROOM_COORDS[id].x} y2={ROOM_COORDS[id].y} stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 3" opacity="0.45" />
-              ))}
-              {PRISM_EDGES.map(([from, to], idx) => (
-                <line key={`edge-${idx}`} x1={ROOM_COORDS[from].x} y1={ROOM_COORDS[from].y} x2={ROOM_COORDS[to].x} y2={ROOM_COORDS[to].y} stroke="#475569" strokeWidth="1.6" />
-              ))}
-              {Object.entries(ROOM_COORDS).map(([idStr, pos]) => {
-                const roomId = Number(idStr);
-                const isOccupied = Object.values(session.players).some((p: any) => p.currentRoomId === roomId);
-                const isQg = roomId === 0;
-                const radius = isQg ? 24 : 18;
-
-                return (
-                  <g key={roomId} transform={`translate(${pos.x}, ${pos.y})`}>
-                    <circle r={radius} fill={isOccupied ? '#312e81' : isQg ? '#1e1b4b' : '#111827'} stroke={isOccupied ? '#818cf8' : isQg ? '#f59e0b' : '#475569'} strokeWidth={isOccupied || isQg ? '2' : '1.5'} />
-                    <text y="3" textAnchor="middle" fill={isQg ? '#fbbf24' : '#f8fafc'} fontSize={isQg ? '10' : '9'} fontWeight="bold">{isQg ? 'QG' : `S.${roomId}`}</text>
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
