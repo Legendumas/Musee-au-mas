@@ -50,8 +50,8 @@ export default function App() {
     }
   };
 
-  // ----------------------------------------------------
-  // ÉCRAN 1 : MENU DE CONFIGURATION INITIALE
+ // ----------------------------------------------------
+  // ÉCRAN 1 : MENU DE CONFIGURATION VIERGE
   // ----------------------------------------------------
   if (!gameStarted || !engine || !gameState) {
     return (
@@ -59,54 +59,73 @@ export default function App() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-xl w-full shadow-2xl space-y-6">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-wider text-amber-400">SUPER CLUEDO — ÉDITION MUSÉE</h1>
-            <p className="text-xs text-slate-400 mt-1">Configuration des Détectives et de leurs Spécialisations</p>
+            <p className="text-xs text-slate-400 mt-1">Configuration des Détectives et du Maître du Jeu</p>
           </div>
 
           <div className="space-y-4">
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-              <h3 className="text-sm font-semibold text-amber-300">🕵️ Détective 1</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <input 
-                  type="text" 
-                  value={p1Name} 
-                  onChange={(e) => setP1Name(e.target.value)} 
-                  placeholder="Nom du joueur"
-                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
-                />
-                <select 
-                  value={p1Role} 
-                  onChange={(e) => setP1Role(e.target.value as RoleType)}
-                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
-                >
-                  <option value="profileuse">Profileuse</option>
-                  <option value="veteran">Vétéran</option>
-                  <option value="technicien">Technicien</option>
-                  <option value="analyste">Analyste</option>
-                </select>
-              </div>
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-semibold text-slate-300">Liste des Détectives ({playersConfig.length})</h3>
+              <button 
+                onClick={() => setPlayersConfig([...playersConfig, { name: '', role: 'analyste' }])}
+                className="bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs px-3 py-1.5 rounded-lg border border-slate-700 transition"
+              >
+                + Ajouter un détective
+              </button>
             </div>
 
-            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-              <h3 className="text-sm font-semibold text-amber-300">🕵️ Détective 2</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <input 
-                  type="text" 
-                  value={p2Name} 
-                  onChange={(e) => setP2Name(e.target.value)} 
-                  placeholder="Nom du joueur"
-                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
-                />
-                <select 
-                  value={p2Role} 
-                  onChange={(e) => setP2Role(e.target.value as RoleType)}
-                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
-                >
-                  <option value="profileuse">Profileuse</option>
-                  <option value="veteran">Vétéran</option>
-                  <option value="technicien">Technicien</option>
-                  <option value="analyste">Analyste</option>
-                </select>
+            {playersConfig.map((p, index) => (
+              <div key={index} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-semibold text-amber-300">🕵️ Détective #{index + 1}</h4>
+                  {playersConfig.length > 1 && (
+                    <button 
+                      onClick={() => setPlayersConfig(playersConfig.filter((_, i) => i !== index))}
+                      className="text-rose-400 hover:text-rose-300 text-xs"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <input 
+                    type="text" 
+                    value={p.name} 
+                    onChange={(e) => {
+                      const updated = [...playersConfig];
+                      updated[index].name = e.target.value;
+                      setPlayersConfig(updated);
+                    }} 
+                    placeholder="Prénom / Nom"
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                  />
+                  <select 
+                    value={p.role} 
+                    onChange={(e) => {
+                      const updated = [...playersConfig];
+                      updated[index].role = e.target.value as RoleType;
+                      setPlayersConfig(updated);
+                    }}
+                    className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                  >
+                    <option value="profileuse">Profileuse</option>
+                    <option value="veteran">Vétéran</option>
+                    <option value="technicien">Technicien</option>
+                    <option value="analyste">Analyste</option>
+                  </select>
+                </div>
               </div>
+            ))}
+
+            {/* Maître du Jeu (MJ) */}
+            <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/50 space-y-2">
+              <h3 className="text-sm font-semibold text-rose-400">👁️ Maître du Jeu (Arbitre)</h3>
+              <input 
+                type="text" 
+                value={mjName} 
+                onChange={(e) => setMjName(e.target.value)} 
+                placeholder="Nom du Maître du Jeu"
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+              />
             </div>
           </div>
 
