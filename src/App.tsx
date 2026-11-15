@@ -2,8 +2,17 @@ import React, { useState } from 'react';
 import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, RoleType } from './gameEngine';
 
 export default function App() {
-  const [engine] = useState(() => new SuperCluedoEngine());
-  const [gameState, setGameState] = useState(() => engine.session);
+  // 1. États pour la configuration initiale (Menu des joueurs)
+  const [gameStarted, setGameStarted] = useState(false);
+  const [p1Name, setP1Name] = useState('Robin');
+  const [p1Role, setP1Role] = useState<RoleType>('profileuse');
+  const [p2Name, setP2Name] = useState('Emma');
+  const [p2Role, setP2Role] = useState<RoleType>('veteran');
+
+  // 2. États principaux du jeu (initialisés après le clic sur "Lancer")
+  const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
+  const [gameState, setGameState] = useState<any>(null);
+
   const [activeTab, setActiveTab] = useState<'board' | 'hq' | 'notes'>('board');
   const [accusationModal, setAccusationModal] = useState(false);
   const [selectedSuspect, setSelectedSuspect] = useState(SUSPECTS[0].id);
@@ -15,13 +24,21 @@ export default function App() {
   const [selectedAction, setSelectedAction] = useState<'deplacer' | 'fouiller_a' | 'fouiller_b' | 'interroger'>('deplacer');
   const [dieResult, setDieResult] = useState<number | null>(3); // Valeur par défaut
 
-  const refreshState = () => {
-    setGameState({ ...engine.session });
+  // Fonction de lancement de la partie
+  const handleStartGame = () => {
+    const newEngine = new SuperCluedoEngine();
+    newEngine.session.players = {
+      player1: { id: 'player1', name: p1Name, role: p1Role, currentRoomId: 0, actionPoints: 2, maxActionPoints: 2, notes: {} },
+      player2: { id: 'player2', name: p2Name, role: p2Role, currentRoomId: 0, actionPoints: 2, maxActionPoints: 2, notes: {} },
+    };
+    setEngine(newEngine);
+    setGameState(newEngine.session);
+    setGameStarted(true);
   };
 
-  const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
-  const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
-  const roomConfig = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
+  const refreshState = () => {
+    if (engine) setGameState({ ...engine.session });
+  };
 
   // Libellés élégants pour les ailes du musée
   const getWingLabel = (ring: string) => {
@@ -33,7 +50,84 @@ export default function App() {
     }
   };
 
-  // Compteurs globaux MJ
+  // ----------------------------------------------------
+  // ÉCRAN 1 : MENU DE CONFIGURATION INITIALE
+  // ----------------------------------------------------
+  if (!gameStarted || !engine || !gameState) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-xl w-full shadow-2xl space-y-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-wider text-amber-400">SUPER CLUEDO — ÉDITION MUSÉE</h1>
+            <p className="text-xs text-slate-400 mt-1">Configuration des Détectives et de leurs Spécialisations</p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <h3 className="text-sm font-semibold text-amber-300">🕵️ Détective 1</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <input 
+                  type="text" 
+                  value={p1Name} 
+                  onChange={(e) => setP1Name(e.target.value)} 
+                  placeholder="Nom du joueur"
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                />
+                <select 
+                  value={p1Role} 
+                  onChange={(e) => setP1Role(e.target.value as RoleType)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                >
+                  <option value="profileuse">Profileuse</option>
+                  <option value="veteran">Vétéran</option>
+                  <option value="technicien">Technicien</option>
+                  <option value="analyste">Analyste</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+              <h3 className="text-sm font-semibold text-amber-300">🕵️ Détective 2</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <input 
+                  type="text" 
+                  value={p2Name} 
+                  onChange={(e) => setP2Name(e.target.value)} 
+                  placeholder="Nom du joueur"
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                />
+                <select 
+                  value={p2Role} 
+                  onChange={(e) => setP2Role(e.target.value as RoleType)}
+                  className="bg-slate-900 border border-slate-700 rounded-lg p-2 text-sm text-slate-100"
+                >
+                  <option value="profileuse">Profileuse</option>
+                  <option value="veteran">Vétéran</option>
+                  <option value="technicien">Technicien</option>
+                  <option value="analyste">Analyste</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button 
+            onClick={handleStartGame}
+            className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl transition shadow-lg text-center"
+          >
+            Lancer l'Enquête 🚀
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // ÉCRAN 2 : PLATEAU DE JEU PRINCIPAL
+  // ----------------------------------------------------
+  const activePlayer = gameState.players[gameState.activePlayerId] || Object.values(gameState.players)[0];
+  const currentRoomState = gameState.roomsState[activePlayer.currentRoomId];
+  const roomConfig = MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId);
+
   const totalDiscoveredNpcs = Object.values(gameState.roomsState).reduce((acc: number, room: any) => acc + room.npcIds.length, 0);
   const totalWeaponsFound = Object.values(gameState.roomsState).filter((room: any) => room.weaponId && room.searchedZones.includes('A')).length;
 
