@@ -5,10 +5,13 @@ export default function App() {
   const [engine, setEngine] = useState<SuperCluedoEngine | null>(null);
   const [session, setSession] = useState<any>(null);
 
-  const [playerNames, setPlayerNames] = useState<string[]>(['Robin', 'Emma']);
-  const [playerRoles, setPlayerRoles] = useState<RoleId[]>(['PROFILER', 'VETERAN']);
+  // Configuration initiale avec option MJ
+  const [participantNames, setParticipantNames] = useState<string[]>(['Robin', 'Emma', 'Arbitre']);
+  const [participantRoles, setParticipantRoles] = useState<string[]>(['PROFILER', 'VETERAN', 'GM']);
 
-  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'GM' | 'NOTEBOOK'>('PLAYER');
+  const [appMode, setAppMode] = useState<'SETUP' | 'PLAYER_TERMINAL' | 'GM_CONSOLE'>('SETUP');
+  const [currentViewMode, setCurrentViewMode] = useState<'PLAYER' | 'NOTEBOOK'>('PLAYER');
+  
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [actionType, setActionType] = useState<'MOVE' | 'SEARCH' | 'INTERROGATE' | 'ANALYZE' | 'ACCUSE' | 'ARREST'>('MOVE');
   const [targetRoom, setTargetRoom] = useState(1);
@@ -18,10 +21,25 @@ export default function App() {
 
   const handleStartGame = (e: React.FormEvent) => {
     e.preventDefault();
-    const formattedPlayers = playerNames.map((name, index) => ({
-      id: `p${index + 1}`,
-      name: name.trim() || `Détective ${index + 1}`,
-      roleId: playerRoles[index],
+    
+    // Séparer les vrais joueurs des Maîtres du Jeu
+    const playersConfig = participantNames
+      .map((name, index) => ({
+        name: name.trim() || `Participant ${index + 1}`,
+        role: participantRoles[index],
+        index,
+      }))
+      .filter((p) => p.role !== 'GM');
+
+    if (playersConfig.length === 0) {
+      alert("Il faut au moins un détective (joueur) pour lancer la partie !");
+      return;
+    }
+
+    const formattedPlayers = playersConfig.map((p, i) => ({
+      id: `p${i + 1}`,
+      name: p.name,
+      roleId: p.role as RoleId,
     }));
 
     const newEngine = new SuperCluedoEngine('MUSE_V2', formattedPlayers);
@@ -29,6 +47,7 @@ export default function App() {
     const newSession = newEngine.getSession();
     setSession(newSession);
     setSelectedPlayerId(newSession.turnOrder[0]);
+    setAppMode('PLAYER_TERMINAL');
   };
 
   const refreshSession = () => {
@@ -49,7 +68,6 @@ export default function App() {
         rawDiceRoll: diceRoll,
       });
       refreshSession();
-      alert('Action transmise au Maître du Jeu avec succès !');
     } catch (e: any) {
       alert(e.message);
     }
@@ -70,7 +88,14 @@ export default function App() {
     refreshSession();
   };
 
-  if (!session || !engine) {
+  // Filtrer les salles accessibles depuis le QG (Salles de l'aile intérieure : 1, 2, 3 par exemple)
+  const activePlayer = session?.players[selectedPlayerId];
+  const availableRooms = activePlayer?.currentRoomId === 0 
+    ? MUSEUM_ROOMS.filter(r => r.id >= 1 && r.id <= 4) // restriction QG vers l'aile intérieure
+    : MUSEUM_ROOMS;
+
+  // --- 1. LOBBY DE CONFIGURATION AVEC RÔLE MJ ---
+  if (appMode === 'SETUP' || !session || !engine) {
     return (
       <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-6 flex flex-col justify-center items-center font-sans">
         <div className="max-w-md w-full bg-[#111827] border border-slate-800 rounded-3xl p-8 shadow-2xl">
@@ -79,23 +104,23 @@ export default function App() {
               Édition Musée v2
             </span>
             <h1 className="text-2xl font-black text-white mt-3">SUPER CLUEDO</h1>
-            <p className="text-xs text-slate-400 mt-1">Module d'enquête interactif & arbitrage</p>
+            <p className="text-xs text-slate-400 mt-1">Configuration des rôles et des participants</p>
           </div>
 
           <form onSubmit={handleStartGame} className="space-y-4 text-xs">
             <div>
-              <label className="block text-slate-300 font-bold mb-2 uppercase tracking-wider text-[10px]">Nombre d'enquêteurs :</label>
+              <label className="block text-slate-300 font-bold mb-2 uppercase tracking-wider text-[10px]">Nombre de participants :</label>
               <div className="grid grid-cols-4 gap-2">
-                {[1, 2, 3, 4].map((count) => (
+                {[2, 3, 4, 5].map((count) => (
                   <button
                     key={count}
                     type="button"
                     onClick={() => {
-                      setPlayerNames(Array.from({ length: count }, (_, i) => playerNames[i] || `Joueur ${i + 1}`));
-                      setPlayerRoles(Array.from({ length: count }, (_, i) => playerRoles[i] || 'PROFILER'));
+                      setParticipantNames(Array.from({ length: count }, (_, i) => participantNames[i] || `Participant ${i + 1}`));
+                      setParticipantRoles(Array.from({ length: count }, (_, i) => participantRoles[i] || (i === count - 1 ? 'GM' : 'PROFILER')));
                     }}
                     className={`py-2 rounded-xl font-bold border transition ${
-                      playerNames.length === count ? 'bg-indigo-600 text-white border-indigo-500 shadow-md' : 'bg-[#0b0f17] text-slate-400 border-slate-800'
+                      participantNames.length === count ? 'bg-indigo-600 text-white border-indigo-500 shadow-md' : 'bg-[#0b0f17] text-slate-400 border-slate-800'
                     }`}
                   >
                     {count}
@@ -105,35 +130,35 @@ export default function App() {
             </div>
 
             <div className="space-y-3">
-              {playerNames.map((name, index) => (
+              {participantNames.map((name, index) => (
                 <div key={index} className="bg-[#0b0f17] p-3.5 rounded-2xl border border-slate-800 space-y-2">
-                  <span className="font-bold text-amber-400 text-[11px]">Enquêteur n°{index + 1}</span>
+                  <span className="font-bold text-amber-400 text-[11px]">Participant n°{index + 1}</span>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => {
-                      const updated = [...playerNames];
+                      const updated = [...participantNames];
                       updated[index] = e.target.value;
-                      setPlayerNames(updated);
+                      setParticipantNames(updated);
                     }}
-                    placeholder={`Nom du joueur ${index + 1}`}
+                    placeholder={`Nom du participant ${index + 1}`}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl p-2.5 text-slate-200 text-xs focus:border-indigo-500 focus:outline-none"
                     required
                   />
                   <select
-                    value={playerRoles[index]}
+                    value={participantRoles[index]}
                     onChange={(e) => {
-                      const updated = [...playerRoles];
-                      updated[index] = e.target.value as RoleId;
-                      setPlayerRoles(updated);
+                      const updated = [...participantRoles];
+                      updated[index] = e.target.value;
+                      setParticipantRoles(updated);
                     }}
                     className="w-full bg-[#111827] border border-slate-700 rounded-xl p-2.5 text-slate-300 text-xs focus:border-indigo-500 focus:outline-none"
                   >
-                    <option value="PROFILER">🧠 Profileuse (Bonus Interrogatoire)</option>
-                    <option value="VETERAN">⭐ Vétéran (Bonus Fouille)</option>
-                    <option value="FORENSIC">🔬 Technicien Forensic (Bonus Labo)</option>
-                    <option value="NEGOTIATOR">🤝 Négociateur</option>
-                    <option value="GEEK">💻 Geek</option>
+                    <option value="PROFILER">🧠 Profileuse (Détective)</option>
+                    <option value="VETERAN">⭐ Vétéran (Détective)</option>
+                    <option value="FORENSIC">🔬 Technicien Forensic (Détective)</option>
+                    <option value="NEGOTIATOR">🤝 Négociateur (Détective)</option>
+                    <option value="GM">💻 Maître du Jeu (Arbitre exclusif)</option>
                   </select>
                 </div>
               ))}
@@ -151,51 +176,98 @@ export default function App() {
     );
   }
 
-  const activePlayer = session.players[selectedPlayerId];
+  // --- 2. CONSOLE EXCLUSIVE DU MAÎTRE DU JEU ---
+  if (appMode === 'GM_CONSOLE') {
+    return (
+      <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
+        <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl mb-4 shadow-xl flex justify-between items-center">
+          <div>
+            <h1 className="text-base font-black text-indigo-400">Console d'Arbitrage MJ</h1>
+            <p className="text-[11px] text-slate-400">Espace exclusif réservé au Maître du Jeu</p>
+          </div>
+          <button 
+            onClick={() => setAppMode('PLAYER_TERMINAL')}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2 rounded-xl text-xs border border-slate-700"
+          >
+            ← Retour Terminal
+          </button>
+        </header>
 
+        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
+          <div className="bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-900/50">
+            <p className="font-bold text-indigo-300 uppercase text-[10px]">🔒 Solution Secrète :</p>
+            <p className="text-slate-300 mt-1">
+              Meurtrier : <span className="text-amber-400 font-bold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span><br />
+              Arme : <span className="text-amber-400 font-bold">{WEAPONS.find(w => w.id === session.secretSolution.weaponId)?.name}</span>
+            </p>
+          </div>
+
+          <div className="bg-[#0b0f17] p-3.5 rounded-xl border border-slate-800">
+            <p className="font-bold text-slate-300 mb-2 text-[10px] uppercase">Action soumise par un joueur :</p>
+            {session.pendingAction ? (
+              <div className="space-y-3">
+                <div className="bg-[#111827] p-3 rounded-xl border border-slate-800 space-y-1">
+                  <p className="text-amber-400 font-bold">{session.pendingAction.playerName} ({session.pendingAction.actionType})</p>
+                  <p className="text-slate-300 text-[11px] font-mono">{session.pendingAction.secretGmVerdict}</p>
+                </div>
+                <button onClick={handleGmApprove} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow">
+                  Valider & Appliquer sur le Plateau 🛡️
+                </button>
+              </div>
+            ) : (
+              <p className="text-slate-500 italic text-center py-6">Aucune action en attente de validation...</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- 3. TERMINAL JOUEUR (SANS ACCÈS MJ SAUF SI LE RÔLE GM EST UTILISÉ SUR CET APPAREIL) ---
   return (
     <div className="min-h-screen bg-[#0b0f17] text-slate-100 p-4 font-sans max-w-xl mx-auto">
-      {/* En-tête tactique */}
       <header className="bg-[#111827] border border-slate-800 p-4 rounded-2xl mb-4 shadow-xl">
         <div className="flex justify-between items-center mb-3">
           <div>
             <h1 className="text-base font-black text-white">Super Cluedo v2</h1>
-            <p className="text-[11px] text-slate-400">Module d'enquête interactif & arbitrage</p>
+            <p className="text-[11px] text-slate-400">Tour n°{session.turnNumber} | Phase : {session.phase}</p>
           </div>
-          <select 
-            value={selectedPlayerId} 
-            onChange={(e) => setSelectedPlayerId(e.target.value)}
-            className="bg-[#0b0f17] text-xs text-slate-200 border border-slate-700 rounded-xl px-3 py-2 font-bold focus:outline-none"
-          >
-            {Object.values(session.players).map((p: any) => (
-              <option key={p.id} value={p.id}>{p.name} ({p.roleId})</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select 
+              value={selectedPlayerId} 
+              onChange={(e) => setSelectedPlayerId(e.target.value)}
+              className="bg-[#0b0f17] text-xs text-slate-200 border border-slate-700 rounded-xl px-3 py-2 font-bold focus:outline-none"
+            >
+              {Object.values(session.players).map((p: any) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.roleId})</option>
+              ))}
+            </select>
+            <button 
+              onClick={() => setAppMode('GM_CONSOLE')}
+              className="bg-indigo-950 text-indigo-300 border border-indigo-800 px-2.5 py-2 rounded-xl text-[10px] font-bold"
+              title="Accès Maître du Jeu"
+            >
+              💻 MJ
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-xs font-bold">
+        <div className="grid grid-cols-2 gap-2 text-xs font-bold">
           <button 
             onClick={() => setCurrentViewMode('PLAYER')}
             className={`py-2 rounded-xl transition border ${currentViewMode === 'PLAYER' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
           >
-            Vue Joueur
+            Terminal Joueur
           </button>
           <button 
             onClick={() => setCurrentViewMode('NOTEBOOK')}
             className={`py-2 rounded-xl transition border ${currentViewMode === 'NOTEBOOK' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
           >
-            Carnet
-          </button>
-          <button 
-            onClick={() => setCurrentViewMode('GM')}
-            className={`py-2 rounded-xl transition border ${currentViewMode === 'GM' ? 'bg-indigo-600 text-white border-indigo-500 shadow' : 'bg-[#0b0f17] text-slate-400 border-slate-800'}`}
-          >
-            Admin / MJ
+            Carnet d'Enquête
           </button>
         </div>
       </header>
 
-      {/* VUE JOUEUR */}
       {currentViewMode === 'PLAYER' && (
         <div className="space-y-4">
           <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl">
@@ -215,7 +287,7 @@ export default function App() {
             <span className="text-[10px] text-slate-400 uppercase font-bold">Position actuelle</span>
             <div className="flex justify-between items-center mt-1">
               <h3 className="font-bold text-white text-sm">
-                Salle {activePlayer.currentRoomId} · {MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId)?.name}
+                {activePlayer.currentRoomId === 0 ? '🔒 QG Central (Départ)' : `Salle ${activePlayer.currentRoomId} · ${MUSEUM_ROOMS.find(r => r.id === activePlayer.currentRoomId)?.name}`}
               </h3>
               <span className="text-xs text-slate-400">Tour {session.turnNumber}</span>
             </div>
@@ -242,13 +314,15 @@ export default function App() {
 
             {actionType === 'MOVE' && (
               <div className="pt-2">
-                <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1">Salle cible :</label>
+                <label className="block text-[10px] text-slate-400 uppercase font-bold mb-1">
+                  {activePlayer.currentRoomId === 0 ? 'Salle cible (Aile intérieure depuis le QG) :' : 'Salle cible adjacente :'}
+                </label>
                 <select 
                   value={targetRoom} 
                   onChange={(e) => setTargetRoom(Number(e.target.value))}
                   className="w-full bg-[#0b0f17] border border-slate-700 rounded-xl p-3 text-slate-200 text-xs focus:outline-none"
                 >
-                  {MUSEUM_ROOMS.map((r) => (
+                  {availableRooms.map((r) => (
                     <option key={r.id} value={r.id}>Salle {r.id} - {r.name}</option>
                   ))}
                 </select>
@@ -270,17 +344,22 @@ export default function App() {
               ))}
             </div>
 
-            <button 
-              onClick={handlePlayerSubmit}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-xl transition shadow text-xs uppercase tracking-wider mt-1"
-            >
-              Soumettre l'action au MJ
-            </button>
+            {session.pendingAction ? (
+              <div className="bg-amber-950/40 border border-amber-800/50 p-3 rounded-xl text-center text-amber-300 text-xs">
+                ⏳ Action transmise ! En attente de validation par le Maître du Jeu...
+              </div>
+            ) : (
+              <button 
+                onClick={handlePlayerSubmit}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-2xl transition shadow text-xs uppercase tracking-wider mt-1"
+              >
+                Soumettre l'action au MJ ⚡
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* CARNET MUTUALISÉ */}
       {currentViewMode === 'NOTEBOOK' && (
         <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
           <h2 className="text-sm font-black text-white">Carnet d'Enquête Mutualisé</h2>
@@ -290,7 +369,7 @@ export default function App() {
                 <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase">
                   <th className="p-2.5">Élément</th>
                   <th className="p-2.5">Catégorie</th>
-                  <th className="p-2.5 text-center">Robin</th>
+                  <th className="p-2.5 text-center">Notes</th>
                   <th className="p-2.5 text-center">Statut</th>
                 </tr>
               </thead>
@@ -300,7 +379,12 @@ export default function App() {
                     <td className="p-2.5 font-bold text-slate-200">{s.name}</td>
                     <td className="p-2.5 text-slate-400">Suspect</td>
                     <td className="p-2.5 text-center">
-                      <span className="inline-block w-7 h-7 leading-7 rounded-lg bg-emerald-950 text-emerald-300 font-bold text-xs border border-emerald-800">✓</span>
+                      <button 
+                        onClick={() => handleCycleCell(s.id, 'GENDER')}
+                        className="w-7 h-7 rounded-lg bg-[#0b0f17] text-slate-300 font-bold text-xs border border-slate-800"
+                      >
+                        ?
+                      </button>
                     </td>
                     <td className="p-2.5 text-center">
                       <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">Innocent</span>
@@ -309,32 +393,6 @@ export default function App() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* CONSOLE MJ */}
-      {currentViewMode === 'GM' && (
-        <div className="bg-[#111827] border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4 text-xs">
-          <h2 className="text-sm font-black text-indigo-400">Console d'Arbitrage MJ</h2>
-          <div className="bg-indigo-950/30 p-3.5 rounded-xl border border-indigo-900/50">
-            <p className="font-bold text-indigo-300 uppercase text-[10px]">🔒 Solution Secrète :</p>
-            <p className="text-slate-300 mt-1">
-              Meurtrier : <span className="text-amber-400 font-bold">{SUSPECTS.find(s => s.id === session.secretSolution.killerId)?.name}</span>
-            </p>
-          </div>
-          <div className="bg-[#0b0f17] p-3.5 rounded-xl border border-slate-800">
-            <p className="font-bold text-slate-300 mb-2 text-[10px] uppercase">Action en attente :</p>
-            {session.pendingAction ? (
-              <div className="space-y-3">
-                <p className="text-amber-400 font-bold">{session.pendingAction.playerName} ({session.pendingAction.actionType})</p>
-                <button onClick={handleGmApprove} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition">
-                  Valider & Mettre à jour le Plateau
-                </button>
-              </div>
-            ) : (
-              <p className="text-slate-500 italic text-center py-4">Aucune action en attente...</p>
-            )}
           </div>
         </div>
       )}
