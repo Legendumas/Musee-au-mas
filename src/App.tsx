@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, RoleType } from './gameEngine';
 
 export default function App() {
-// 1. Configuration initiale : États vides et forcés à null pour afficher le menu au démarrage
+  // 1. Configuration initiale : États vides et forcés à false pour afficher le menu au démarrage
   const [gameStarted, setGameStarted] = useState(false);
   const [playersConfig, setPlayersConfig] = useState<Array<{ name: string; role: RoleType }>>([
     { name: '', role: 'profileuse' }
@@ -51,8 +51,9 @@ export default function App() {
     newEngine.session.players = formattedPlayers;
     setEngine(newEngine);
     setGameState(newEngine.session);
-    setGameStarted(true);
+    setGameStarted(true); // Bascule l'affichage vers le plateau
   };
+
   const refreshState = () => {
     if (engine) setGameState({ ...engine.session });
   };
@@ -67,10 +68,10 @@ export default function App() {
     }
   };
 
- // ----------------------------------------------------
-  // ÉCRAN 1 : MENU DE CONFIGURATION VIERGE
   // ----------------------------------------------------
-  if (!gameStarted || !engine || !gameState) {
+  // ÉCRAN 1 : MENU DE CONFIGURATION (S'affiche si gameStarted est false)
+  // ----------------------------------------------------
+  if (!gameStarted) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-xl w-full shadow-2xl space-y-6">
