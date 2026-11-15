@@ -1,5 +1,5 @@
 // ==========================================
-// SUPER CLUEDO - ÉDITION MUSÉE (GAME ENGINE COMPLET)
+// SUPER CLUEDO - ÉDITION MUSÉE (GAME ENGINE COMPLET & DYNAMIQUE)
 // ==========================================
 
 export type RoleType = 'profileuse' | 'veteran' | 'technicien' | 'analyste';
@@ -62,6 +62,7 @@ export interface GameSession {
   npcMovements: Record<string, NpcMovement>;
   analyzedClues: string[];
   hqInbox: string[];
+  gameLogs: string[];
 }
 
 // ------------------------------------------
@@ -110,11 +111,16 @@ export const WEAPONS: Weapon[] = [
 export class SuperCluedoEngine {
   public session: GameSession;
 
-  constructor() {
-    this.session = this.initNewGame();
+  constructor(playersConfig?: Array<{ name: string; role: RoleType }>) {
+    this.session = this.initNewGame(playersConfig);
   }
 
-  public initNewGame(): GameSession {
+  private log(message: string): void {
+    const timestamp = `[Tour ${this.session.turn}]`;
+    this.session.gameLogs.unshift(`${timestamp} ${message}`);
+  }
+
+  public initNewGame(playersConfig?: Array<{ name: string; role: RoleType }>): GameSession {
     const murderer = SUSPECTS[Math.floor(Math.random() * SUSPECTS.length)];
     const weapon = WEAPONS[Math.floor(Math.random() * WEAPONS.length)];
     const targetRoomId = Math.floor(Math.random() * 10) + 1;
@@ -123,6 +129,7 @@ export class SuperCluedoEngine {
 
     const roomsState: Record<number, RoomState> = {};
     for (const r of MUSEUM_ROOMS) {
+      // PNJ initialement cachés (npcIds vide)
       roomsState[r.id] = { roomId: r.id, npcIds: [], searchedZones: [], clueIds: [] };
     }
 
@@ -132,19 +139,29 @@ export class SuperCluedoEngine {
       roomsState[roomId].weaponId = w.id;
     });
 
-    // Placement initial des PNJ (max 2 par pièce)
-    SUSPECTS.forEach((suspect, idx) => {
-      const targetRoom = (idx % 10) + 1;
-      if (roomsState[targetRoom].npcIds.length < 2) {
-        roomsState[targetRoom].npcIds.push(suspect.id);
-      } else {
-        roomsState[1].npcIds.push(suspect.id);
-      }
-    });
+    // Configuration dynamique des joueurs
+    const players: Record<string, PlayerState> = {};
+    if (playersConfig && playersConfig.length > 0) {
+      playersConfig.forEach((p, index) => {
+        const playerId = `player${index + 1}`;
+        players[playerId] = {
+          id: playerId,
+          name: p.name.trim() || `Détective ${index + 1}`,
+          role: p.role,
+          currentRoomId: 0,
+          actionPoints: 2,
+          maxActionPoints: 2,
+        };
+      });
+    } else {
+      players['player1'] = { id: 'player1', name: 'Détective 1', role: 'profileuse', currentRoomId: 0, actionPoints: 2, maxActionPoints: 2 };
+    }
+
+    const firstPlayerId = Object.keys(players)[0];
 
     return {
       turn: 1,
-      activePlayerId: 'player1',
+      activePlayerId: firstPlayerId,
       phase: 'investigation',
       secretSolution: {
         murdererId: murderer.id,
@@ -152,14 +169,12 @@ export class SuperCluedoEngine {
         roomId: targetRoomId,
         motiveId: motive,
       },
-      players: {
-        player1: { id: 'player1', name: 'Robin', role: 'profileuse', currentRoomId: 0, actionPoints: 2, maxActionPoints: 2 },
-        player2: { id: 'player2', name: 'Emma', role: 'veteran', currentRoomId: 0, actionPoints: 2, maxActionPoints: 2 },
-      },
+      players,
       roomsState,
       npcMovements: {},
       analyzedClues: [],
       hqInbox: [],
+      gameLogs: ["Partie initialisée. Les PNJ sont dissimulés dans le musée."],
     };
   }
 
@@ -175,6 +190,9 @@ export class SuperCluedoEngine {
 
     player.currentRoomId = targetRoomId;
     player.actionPoints -= 1;
+
+    const targetConfig = MUSEUM_ROOMS.find(r => r.id === targetRoomId);
+    this.log(`${player.name} s'est déplacé vers ${targetConfig?.name} (Salle #${targetRoomId}).`);
     return true;
   }
 
@@ -197,9 +215,20 @@ export class SuperCluedoEngine {
     roomState.searchedZones.push(zone);
     player.actionPoints -= 1;
 
-    // Découverte potentielle (Arme unique de la salle ou Indice de motif)
+    // Révélation potentielle d'un PNJ caché lors de la fouille
+    const hiddenSuspects = SUSPECTS.filter(s => !Object.values(this.session.roomsState).some(rs => rs.npcIds.includes(s.id)));
+    if (hiddenSuspects.length > 0 && Math.random() > 0.3 && roomState.npcIds.length === 0 && roomState.roomId !== 0) {
+      const revealedNpc = hiddenSuspects[Math.floor(Math.random() * hiddenSuspects.length)];
+      roomState.npcIds.push(revealedNpc.id);
+      this.log(`${player.name} a fouillé la zone ${zone} (Salle #${roomState.roomId}) et a repéré le suspect : ${revealedNpc.name}.`);
+    } else {
+      this.log(`${player.name} a fouillé la zone ${zone} de la salle #${roomState.roomId}.`);
+    }
+
+    // Découverte potentielle (Arme unique de la salle)
     if (zone === 'A' && roomState.weaponId) {
       const weapon = WEAPONS.find((w) => w.id === roomState.weaponId);
+      this.log(`Arme découverte : ${weapon?.name} dans la salle #${roomState.roomId}.`);
       return {
         success: true,
         message: `Fouille réussie ! Vous avez découvert l'arme : ${weapon?.name}. Vous pouvez l'envoyer au QG gratuitement.`,
@@ -208,35 +237,39 @@ export class SuperCluedoEngine {
     }
 
     return {
-        success: true,
-        message: `Fouille de la zone ${zone} effectuée. Aucun objet majeur trouvé ici, mais l'indice est consigné.`,
+      success: true,
+      message: `Fouille de la zone ${zone} effectuée.`,
     };
   }
 
   /**
-   * Action gratuite (0 PA) : Envoyer une arme ou un indice au QG central
+   * Action gratuite (0 PA) : Envoyer une arme au QG central
    */
   public sendItemToHQ(itemId: string): void {
     if (!this.session.hqInbox.includes(itemId)) {
       this.session.hqInbox.push(itemId);
+      const weapon = WEAPONS.find(w => w.id === itemId);
+      this.log(`Objet transmis au QG central : ${weapon?.name || itemId}`);
     }
   }
 
   /**
-   * Analyse d'une pièce à conviction (sur place pour le Technicien, ou centralisée)
+   * Analyse d'une pièce à conviction
    */
   public analyzeItem(itemId: string): boolean {
     if (!this.session.analyzedClues.includes(itemId)) {
       this.session.analyzedClues.push(itemId);
+      const weapon = WEAPONS.find(w => w.id === itemId);
+      this.log(`Analyse QG validée pour l'élément : ${weapon?.name || itemId}`);
       return true;
     }
     return false;
   }
 
   /**
-   * Interrogatoire d'un PNJ présent dans la même salle (coûte 1 PA ou gratuit selon variante, ici 1 PA)
+   * Interrogatoire d'un PNJ avec gestion du dé physique (1-3 : Vérité, info partielle ou panique ; 4-6 : Succès complet)
    */
-  public performInterrogation(playerId: string, npcId: string): { testimonial: string; isUseful: boolean } {
+  public performInterrogation(playerId: string, npcId: string, dieRoll: number): { testimonial: string; isUseful: boolean } {
     const player = this.session.players[playerId];
     if (!player || player.actionPoints < 1) {
       return { testimonial: "PA insuffisants pour interroger.", isUseful: false };
@@ -248,99 +281,57 @@ export class SuperCluedoEngine {
     }
 
     player.actionPoints -= 1;
-    const npcMovement = this.session.npcMovements[npcId];
     const npcObject = SUSPECTS.find((s) => s.id === npcId)!;
+    const movement = this.session.npcMovements[npcId];
 
-    const start = npcMovement ? npcMovement.initialRoomId : player.currentRoomId;
-    const end = npcMovement ? npcMovement.finalRoomId : player.currentRoomId;
-    const movementText = start === end 
-      ? `Je suis resté discret dans la zone ${start} ces derniers tours.` 
-      : `Je me suis déplacé de la salle ${start} pour rejoindre ici (${end}).`;
+    const fromRoomName = movement ? MUSEUM_ROOMS.find(r => r.id === movement.initialRoomId)?.name || `Salle #${movement.initialRoomId}` : 'une autre salle';
+    const toRoomName = movement ? MUSEUM_ROOMS.find(r => r.id === movement.finalRoomId)?.name || `Salle #${movement.finalRoomId}` : 'ici';
 
-    const hasElevatorSound = player.currentRoomId >= 6 && player.currentRoomId <= 10;
-    const soundText = hasElevatorSound 
-      ? " J'ai perçu les grincements sourds du monte-charge à travers les cloisons." 
-      : " L'ambiance était calme.";
+    let testimonial = "";
+    let isUseful = false;
 
-    return {
-      testimonial: `"${movementText}${soundText}"`,
-      isUseful: true,
-    };
+    if (dieRoll >= 4) {
+      // --- SUCCÈS (4, 5, 6) : Vérité complète ---
+      testimonial = `"${npcObject.name} : Je venais de ${fromRoomName} pour me rendre dans la salle ${toRoomName}."`;
+      isUseful = true;
+      this.log(`${player.name} a réussi l'interrogatoire de ${npcObject.name} (Dé : ${dieRoll}). Témoignage complet.`);
+    } else {
+      // --- ÉCHEC (1, 2, 3) : Vérité, info partielle ou panique/mensonge ---
+      const failBehaviors = [
+        `"${npcObject.name} : Pour tout vous dire, je venais de ${fromRoomName} et je suis arrivé ici (${toRoomName})."`, // Vérité malgré l'échec
+        `"${npcObject.name} : Tout ce dont je me souviens, c'est que je partais de ${fromRoomName}..."`, // Info partielle (départ)
+        `"${npcObject.name} : Je me dirigeais vers ${toRoomName}, mais le reste est flou."`, // Info partielle (arrivée)
+        `"${npcObject.name} : Laissez-moi tranquille ! Je n'ai bougé de nulle part, je n'ai rien vu !"`, // Panique / Mensonge
+        `"${npcObject.name} : Je venais de l'autre bout du musée..."` // Faux témoignage de panique
+      ];
+
+      testimonial = failBehaviors[Math.floor(Math.random() * failBehaviors.length)];
+      isUseful = false;
+      this.log(`${player.name} a obtenu un témoignage incertain de ${npcObject.name} suite à un échec au dé (Dé : ${dieRoll}).`);
+    }
+
+    return { testimonial, isUseful };
   }
 
   /**
-   * Déplacement automatique des PNJ (0 à 2 pas, respect de max 2 PNJ/salle et anti-duo)
-   */
-  public moveAllNpcs(): void {
-    const previousRoomByNpc: Record<string, number> = {};
-    const roommatesBefore: Record<string, string[]> = {};
-
-    for (const r of MUSEUM_ROOMS) {
-      const npcsInRoom = this.session.roomsState[r.id].npcIds;
-      for (const npcId of npcsInRoom) {
-        previousRoomByNpc[npcId] = r.id;
-        roommatesBefore[npcId] = npcsInRoom.filter((id) => id !== npcId);
-      }
-    }
-
-    for (const r of MUSEUM_ROOMS) {
-      this.session.roomsState[r.id].npcIds = [];
-    }
-
-    const newRoomByNpc: Record<string, number> = {};
-
-    for (const [npcId, oldRoom] of Object.entries(previousRoomByNpc)) {
-      const oldPartners = roommatesBefore[npcId] || [];
-      let chosenRoom = oldRoom;
-      let attempts = 0;
-      let validMove = false;
-
-      while (!validMove && attempts < 15) {
-        attempts++;
-        const steps = Math.floor(Math.random() * 3); // 0, 1 ou 2 pas
-        let currentPathNode = oldRoom;
-
-        for (let s = 0; s < steps; s++) {
-          const roomConfig = MUSEUM_ROOMS.find((r) => r.id === currentPathNode)!;
-          const neighbors = roomConfig.adjacentRooms.filter((id) => id !== 0); // Évite le QG
-          if (neighbors.length > 0) {
-            currentPathNode = neighbors[Math.floor(Math.random() * neighbors.length)];
-          }
-        }
-
-        const candidateRoom = currentPathNode;
-        const npcsInCandidate = this.session.roomsState[candidateRoom]?.npcIds || [];
-
-        const sharesPartnerWithOld = oldPartners.some((partnerId) => newRoomByNpc[partnerId] === candidateRoom);
-        const wouldBeValid = npcsInCandidate.length < 2 && !sharesPartnerWithOld;
-
-        if (wouldBeValid) {
-          chosenRoom = candidateRoom;
-          validMove = true;
-        }
-      }
-
-      newRoomByNpc[npcId] = chosenRoom;
-      this.session.roomsState[chosenRoom].npcIds.push(npcId);
-
-      this.session.npcMovements[npcId] = {
-        npcId,
-        initialRoomId: oldRoom,
-        finalRoomId: chosenRoom,
-        path: [oldRoom, chosenRoom],
-      };
-    }
-  }
-
-  /**
-   * Fin de tour : recharge les PA et déplace les PNJ
+   * Fin de tour : recharge les PA (les PNJ restent immobiles par défaut)
    */
   public nextTurn(): void {
     this.session.turn += 1;
     for (const pId of Object.keys(this.session.players)) {
       this.session.players[pId].actionPoints = this.session.players[pId].maxActionPoints;
     }
-    this.moveAllNpcs();
+    this.log(`Début du tour n°${this.session.turn}.`);
+  }
+
+  public submitAccusation(suspectId: string, weaponId: string, roomId: number) {
+    const sol = this.session.secretSolution;
+    if (sol.murdererId === suspectId && sol.weaponId === weaponId && sol.roomId === roomId) {
+      this.session.phase = 'chase';
+      this.log(`ACCUSATION CORRECTE ! Le suspect prend la fuite (Mode Traque activé).`);
+    } else {
+      this.log(`Accusation fausse formulée par les détectives.`);
+    }
   }
 }
 // ==========================================
@@ -353,11 +344,3 @@ export interface ChaseState {
   remainingTurns: number;
   status: 'active' | 'arrested' | 'escaped';
 }
-
-// Méthode optionnelle à intégrer dans ta classe SuperCluedoEngine si tu veux centraliser la logique de traque :
-/*
-  public triggerChase(fugitiveId: string, initialRoomId: number) {
-    this.session.phase = 'chase';
-    this.log(`ALERTE : Mode traque activé ! ${fugitiveId} prend la fuite depuis la salle #${initialRoomId}.`);
-  }
-*/
