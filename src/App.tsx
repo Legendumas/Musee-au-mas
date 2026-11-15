@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SuperCluedoEngine, MUSEUM_ROOMS, SUSPECTS, WEAPONS, RoleType } from './gameEngine';
 
 export default function App() {
-// 1. Configuration initiale entièrement vide et dynamique
+// 1. Configuration initiale : États vides et forcés à null pour afficher le menu au démarrage
   const [gameStarted, setGameStarted] = useState(false);
   const [playersConfig, setPlayersConfig] = useState<Array<{ name: string; role: RoleType }>>([
     { name: '', role: 'profileuse' }
